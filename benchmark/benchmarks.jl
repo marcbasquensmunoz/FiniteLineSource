@@ -21,3 +21,4 @@ end
 
 tune!(suite)
 results = run(suite, verbose = true, seconds = 10)
+"Hello"
