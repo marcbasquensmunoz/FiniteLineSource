@@ -1,6 +1,5 @@
 using BenchmarkTools
 using FiniteLineSource
-using Plots
 
 SUITE = BenchmarkGroup()
 SUITE["seg_to_seg"] = @benchmarkable begin
@@ -16,7 +15,6 @@ SUITE["T_field"] = @benchmarkable begin
     s = BoreholeSegment(0, 0, 0.5, 2, 0.1)
     points = [(i, j) for i in 0:0.1:2, j in 0.1:0.1:2]
     points = T_ls.(last.(points), first.(points), 10, Ref(s))
-    heatmap(points)
 end
 
 #tune!(suite)
