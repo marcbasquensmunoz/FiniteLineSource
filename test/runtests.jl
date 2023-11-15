@@ -1,6 +1,8 @@
 using FiniteLineSource
 using Test
 
+include("Aqua.jl")
+
 @testset "segment_to_segment_step_response" begin
     source_segment = BoreholeSegment(0, 0, 1, 5, 0.5)
     receptor_segment = BoreholeSegment(0, 1, 1, 5, 0.5)
