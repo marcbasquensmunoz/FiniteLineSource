@@ -1,1 +1,1 @@
-[![Build Status](https://github.com/marcbasquensmunoz/FiniteLineSource.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/marcbasquensmunoz/FiniteLineSource.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Build Status](https://github.com/marcbasquensmunoz/FiniteLineSource/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/marcbasquensmunoz/FiniteLineSource/actions/workflows/CI.yml?query=branch%3Amain)
