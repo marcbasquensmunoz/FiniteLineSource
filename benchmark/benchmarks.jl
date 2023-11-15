@@ -19,6 +19,6 @@ suite["T_field"] = @benchmarkable begin
     heatmap(points)
 end
 
-tune!(suite)
-results = run(suite, verbose = true, seconds = 10)
-"Hello"
+#tune!(suite)
+#results = run(suite, verbose = true, seconds = 10)
+#"Hello"
