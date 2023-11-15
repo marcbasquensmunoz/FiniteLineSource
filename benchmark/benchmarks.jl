@@ -16,7 +16,3 @@ SUITE["T_field"] = @benchmarkable begin
     points = [(i, j) for i in 0:0.1:2, j in 0.1:0.1:2]
     points = T_ls.(last.(points), first.(points), 10, Ref(s))
 end
-
-#tune!(suite)
-#results = run(suite, verbose = true, seconds = 10)
-#"Hello"
