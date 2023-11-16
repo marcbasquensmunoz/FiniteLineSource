@@ -3,7 +3,7 @@ using BenchmarkTools
 
 export SUITE
 
-const SUITE = BenchmarkGroup()
+SUITE = BenchmarkGroup()
 
 SUITE["utf8"] = BenchmarkGroup(["string", "unicode"])
 
