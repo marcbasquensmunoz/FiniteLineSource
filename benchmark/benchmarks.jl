@@ -1,5 +1,3 @@
-import Pkg 
-Pkg.add("Plots")
 using BenchmarkTools
 using FiniteLineSource
 
