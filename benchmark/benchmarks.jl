@@ -1,6 +1,8 @@
 using BenchmarkTools
 #using FiniteLineSource
 
+export SUITE
+
 const SUITE = BenchmarkGroup()
 #=SUITE["seg_to_seg"] = @benchmarkable begin
     s1 = BoreholeSegment(0, 0, 0.5, 2, 0.1)
