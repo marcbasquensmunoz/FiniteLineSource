@@ -1,5 +1,4 @@
 using BenchmarkTools
-using FiniteLineSource
 
 SUITE = BenchmarkGroup()
 SUITE["seg_to_seg"] = @benchmarkable begin
