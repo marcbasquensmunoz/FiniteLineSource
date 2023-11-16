@@ -6,6 +6,7 @@ using FiniteLineSource
 SUITE = BenchmarkGroup()
 
 SUITE["utf8"] = BenchmarkGroup(["string", "unicode"])
+SUITE["fls"] = BenchmarkGroup(["string", "unicode"])
 
 teststr = "this is a test"
 
