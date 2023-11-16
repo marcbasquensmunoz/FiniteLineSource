@@ -5,15 +5,7 @@ using FiniteLineSource
 
 SUITE = BenchmarkGroup()
 
-SUITE["utf8"] = BenchmarkGroup(["string", "unicode"])
 SUITE["fls"] = BenchmarkGroup(["string", "unicode"])
-
-teststr = "this is a test"
-
-SUITE["utf8"]["replace"] = @benchmarkable replace($teststr, "a" => "b")
-SUITE["utf8"]["join"] = @benchmarkable join($teststr, $teststr)
-SUITE["utf8"]["plots"] = BenchmarkGroup()
-
 
 function seg_to_seg()
     s1 = BoreholeSegment(0, 0, 0.5, 2, 0.1)
