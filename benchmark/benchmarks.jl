@@ -1,7 +1,7 @@
 using BenchmarkTools
 #using FiniteLineSource
 
-export SUITE
+#export SUITE
 
 SUITE = BenchmarkGroup()
 
