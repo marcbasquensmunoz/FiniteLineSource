@@ -4,12 +4,24 @@ authors = ["Marc Basquens <marc5@kth.se> and contributors"]
 version = "1.0.0-DEV"
 
 [deps]
+Bessels = "0e736298-9ec6-45e8-9647-e4fc86a2fe38"
+DSP = "717857b8-e6f2-59f4-9121-6e50c889abd2"
+FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
+LegendrePolynomials = "3db4a2ba-fc88-11e8-3e01-49c72059a882"
+Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
+Aqua = "~0.8"
+Bessels = "~0.2"
+DSP = "~0.7"
+FastGaussQuadrature = "~1.0"
+LegendrePolynomials = "~0.4"
+Polynomials = "~4.0"
 QuadGK = "~2.9"
 SpecialFunctions = "~2.3"
+Test = "~1.10"
 julia = "1"
 
 [extras]

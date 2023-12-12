@@ -1,9 +1,13 @@
 using BenchmarkTools
 using FiniteLineSource
-using Plots
 
-suite = BenchmarkGroup()
-suite["seg_to_seg"] = @benchmarkable begin
+#export SUITE
+
+SUITE = BenchmarkGroup()
+
+SUITE["fls"] = BenchmarkGroup(["string", "unicode"])
+
+function seg_to_seg()
     s1 = BoreholeSegment(0, 0, 0.5, 2, 0.1)
     s2 = BoreholeSegment(0, 1, 1, 5, 0.1)
 
@@ -12,12 +16,11 @@ suite["seg_to_seg"] = @benchmarkable begin
     result = response.(t)
 end
 
-suite["T_field"] = @benchmarkable begin
+function T_field()
     s = BoreholeSegment(0, 0, 0.5, 2, 0.1)
     points = [(i, j) for i in 0:0.1:2, j in 0.1:0.1:2]
     points = T_ls.(last.(points), first.(points), 10, Ref(s))
-    heatmap(points)
 end
 
-tune!(suite)
-results = run(suite, verbose = true, seconds = 10)
+SUITE["fls"]["seg2seg"] = @benchmarkable seg_to_seg()
+SUITE["fls"]["T_field"] = @benchmarkable T_field()
