@@ -4,6 +4,10 @@ export BoreholeSegment, segment_to_segment_step_response, T_ls, compute_integral
 
 using SpecialFunctions
 using QuadGK
+using FastGaussQuadrature
+using Bessels
+using LegendrePolynomials
+using DSP
 
 include("BoreholeSegment.jl")
 include("segment_response.jl")
