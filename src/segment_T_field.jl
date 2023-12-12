@@ -1,3 +1,5 @@
+using QuadGK
+
 function T_ls_integrand(x, r, z, s::BoreholeSegment) 
     positive_contributions = [z - s.D, z + s.D + s.L]
     negative_contributions = [z + s.D, z - s.D - s.L]
