@@ -1,29 +1,38 @@
-using Plots
 using FastGaussQuadrature
 using Bessels
 using LegendrePolynomials
+using SpecialFunctions
+using DSP
 
 # Physical parameters
-Δt = 3600    # time step
-κ = 10^-6    # thermal diffusivity
-r = 1        # distance
-rb = 0.1     # borehole radius
+# Δt  - time step
+# r   - distance to the borehole
+# rb  - borehole radius
+# α   - thermal diffusivity
+# kg  - thermal conductivity
 
-# Computation parameters
-Δt̃ = κ/rb^2 * Δt   # Non-dimensional time step
-r̃ = r/rb           # Non-dimensional distance
-ω = r̃              # Oscillation frequency
-n = 100            # Number of points to evaluate
-
-# Global constant 
-C = 1 / (2 * π^2 * r̃ * rb^3)
-
+# Computes F in the next time step from the previous one
 function evolve!(fx, x, Δt, q)
     @. fx = fx * exp(-x^2*Δt) + q * (1 - exp(-x^2*Δt)) / x
 end
 
-function compute_integral(Q)
-    n = 100
+# Computes the integral of F from 0 to Inf at time t = Δt * length(Q)
+function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
+    # Total simulation time
+    t = Δt * length(Q)
+    # The heat wave has not reached points at distance r yet (up to double precision)
+    if t < r^2 / (12^2 * α)
+        return 0
+    end
+
+    # Computation parameters
+    Δt̃ = α/rb^2 * Δt   # Non-dimensional time step
+    r̃ = r/rb           # Non-dimensional distance
+    ω = r̃              # Oscillation frequency of the integrand
+
+    # Global constant 
+    C = 1 / (2 * π^2 * r * kg) 
+
     a = 0
     b = 10
     m = (b-a)/2
@@ -40,48 +49,63 @@ function compute_integral(Q)
     end
 
     last_load = Q[length(Q)] 
-    @. fx = fx - last_load / x 
-
+    @. fx = fx - last_load / x
+    
     Ω = ω * m
-    Iexp = 0
+    Iexp = zeros(n+1)
     for k in 0:n
-        Iexp += (im)^(k) * (2k+1) * sqrt(π/(2Ω)) * Bessels.besselj(k+1/2, Ω) * sum(w .* Pl.(xt, k) .* fx)
+        Iexp += (im)^(k) * (2k+1) * Bessels.besselj(k+1/2, Ω) * Pl.(xt, k)
     end
+    Iexp = sum(w .* Iexp .* fx) * sqrt(π/(2Ω))
     Iexp *= m*exp(im*ω*c)
 
-    Ic = 0#π/2*last_load
+    Ic = π/2*last_load
     return C * (imag(Iexp) + Ic)
 end
 
-t = 0:10*8760
-Q = [rand([10.,20.,30.,45.,0., -10., -20., -30.])  + 60*sin(1/8760* 2π*i) .- 30 for i in t]  
 
-compute_integral(Q)
-
-
+###################
 ###### Tests ######
+###################
 
-# For Q = [1], Δt = 3600, κ = 10^-6, r = 1, rb = 0.1 
-# Ie = -1/(4*π*r*rb^2) * erf( r / (2*sqrt(κ*Δt)) ) = -7.957747154594767
-# I = 1/(4*π*r*rb^2) * erfc( r / (2*sqrt(κ*Δt)) ) = 3.7066782213246847e-31  # Not enough precision
+###### Check correctness against analytical solutions ######
+
+# Δt = 3600, rb = 0.1, α = 10^-6, kg = 3
+
+# For Q = [1]
+Ie = - erf( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
+I = erfc( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
+
+# r = 1
+# Ie = -0.026525823848649224
+# I =  1.2355594071082283e-33
+
+# r = 0.1
+# Ie = -0.20196952486650624
+# I =  0.06328871361998596
 
 
-point_impulse(t, r, κ=10^-6) = 1/(4*π*κ*t)^(3/2) * exp(-r^2/(4κ*t))
-point_step(t, r, κ=10^-6) = erfc(r/(2*sqrt(t*κ))) / (4*π*r*κ)
+# For Q = [1, zeros(n)]
+I = ( erf( r / sqrt(n*4*α*Δt) ) - erf( r / sqrt((n+1)*4*α*Δt) ) ) / (4*π*r*kg) 
 
-function simulate(Q)
-    Q = [0; Q]
-    t = dt * length(Q)
+# For n = 5, r = 0.1
+# I = 0.008558835281496709
 
-    result = 0
-    for i in 1:length(Q)-1
-        result += (Q[i+1] - Q[i]) * point_step(t - i*dt, R)
-    end
-    return result
-    #=
-    dt = 3600
-    t = dt:dt:dt*length(Q)
-    response = point_impulse.(t, R)
-    return sum(conv(Q, response))
-    =#
+
+###### Check correctness against convolution ######
+
+point_step(t, r, α = 10^-6, kg = 3.) = erfc(r/(2*sqrt(t*α))) / (4*π*r*kg)
+
+function convolve_step(Q; Δt, r, α = 10^-6)
+    Q = diff([0; Q])
+    t = Δt:Δt:Δt*length(Q)
+    response = point_step.(t, r, α)
+    return conv(Q, response)[length(Q)]
 end
+
+function compare(Q, Δt, r)
+    println(convolve_step(Q, Δt = Δt, r = r))
+    println(compute_integral(Q, Δt = Δt, r = r))
+end 
+
+compare([1], 3600, 0.1)
