@@ -1,11 +1,7 @@
 using BenchmarkTools
 using FiniteLineSource
 
-#export SUITE
-
 SUITE = BenchmarkGroup()
-
-SUITE["fls"] = BenchmarkGroup(["string", "unicode"])
 
 function seg_to_seg()
     s1 = BoreholeSegment(0, 0, 0.5, 2, 0.1)
