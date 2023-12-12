@@ -11,4 +11,3 @@ end
 function segment_to_segment_step_response(t; source::BoreholeSegment, receptor::BoreholeSegment, α = 3*10^-6)
     t == 0 ? 0.0 : 1 / (2 * receptor.L) * quadgk(x -> seg2seg_integrand(x, source, receptor), 1/sqrt(4α * t), Inf)[1]
 end
-"Hello"
