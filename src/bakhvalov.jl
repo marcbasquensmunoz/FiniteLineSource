@@ -16,7 +16,7 @@ function evolve!(fx, x, Δt, q)
     @. fx = fx * exp(-x^2*Δt) + q * (1 - exp(-x^2*Δt)) / x
 end
 
-# Computes the integral of F from 0 to Inf at time t = Δt * length(Q)
+# Computes the integral of F from 0 to Inf at time t = Δt * length(Q) using the Bakhvalov and Vasil’eva method
 function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
     # Total simulation time
     t = Δt * length(Q)
@@ -73,20 +73,20 @@ end
 # Δt = 3600, rb = 0.1, α = 10^-6, kg = 3
 
 # For Q = [1]
-Ie = - erf( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
-I = erfc( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
+# Ie = - erf( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
+# I = erfc( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
 
 # r = 1
 # Ie = -0.026525823848649224
-# I =  1.2355594071082283e-33
+# I = 1.2355594071082283e-33
 
 # r = 0.1
 # Ie = -0.20196952486650624
-# I =  0.06328871361998596
+# I = 0.06328871361998596
 
 
 # For Q = [1, zeros(n)]
-I = ( erf( r / sqrt(n*4*α*Δt) ) - erf( r / sqrt((n+1)*4*α*Δt) ) ) / (4*π*r*kg) 
+# I = ( erf( r / sqrt(n*4*α*Δt) ) - erf( r / sqrt((n+1)*4*α*Δt) ) ) / (4*π*r*kg) 
 
 # For n = 5, r = 0.1
 # I = 0.008558835281496709
