@@ -128,7 +128,9 @@ uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FiniteLineSource]]
 deps = ["Bessels", "DSP", "FastGaussQuadrature", "LegendrePolynomials", "Polynomials", "QuadGK", "SpecialFunctions"]
-path = ".."
+git-tree-sha1 = "fd16012d24365859a6e935abc472ccedc2970c25"
+repo-rev = "benchmark"
+repo-url = ".."
 uuid = "64cfb1b1-06f0-48af-b80e-43c410dfe9e8"
 version = "1.0.0-DEV"
 
