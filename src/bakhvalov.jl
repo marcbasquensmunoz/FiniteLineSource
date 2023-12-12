@@ -109,3 +109,4 @@ function compare(Q, Δt, r)
 end 
 
 compare([1], 3600, 0.1)
+

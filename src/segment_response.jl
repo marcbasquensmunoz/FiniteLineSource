@@ -1,3 +1,6 @@
+using SpecialFunctions
+using QuadGK
+
 ierf(x) = x * erf(x) - (1 - exp(-x^2)) / sqrt(π)
 
 "Integrand of the thermal response for the borehole wall of s₂ caused by heat extraction at s₁"
