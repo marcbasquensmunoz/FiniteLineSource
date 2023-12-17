@@ -29,6 +29,8 @@ end
 @test compute_integral([1; zeros(5)], Δt = 3600, r = 0.1) - FiniteLineSource.convolve_step([1; zeros(5)], Δt = 3600, r = 0.1) ≈ 0   atol = 5*10^-14
 end
 
+# integral over an interval is equal to integral over sub-intervals (Currently Failing!)
+@test compute_integral([1; zeros(5)], Δt = 3600, r = 0.1, a=0., b=10.)  ≈ compute_integral([1; zeros(5)], Δt = 3600, r = 1, a=0.,b=5.) +  compute_integral([1; zeros(5)], Δt = 3600, r = 1, a=5.,b=10.)
 
 ####################
 ## Longer load tests

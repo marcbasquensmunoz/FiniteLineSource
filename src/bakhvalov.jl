@@ -26,7 +26,7 @@ end
 
 
 # Computes the integral of F from 0 to Inf at time t = Δt * length(Q) using the Bakhvalov and Vasil’eva method
-function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
+function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3., a =0., b=10.)
     # Total simulation time
     t = Δt * length(Q)
     # The heat wave has not reached points at distance r yet (up to double precision)
@@ -42,8 +42,8 @@ function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
     # Global constant 
     C = 1 / (2 * π^2 * r * kg) 
     
-    a = 0.
-    b = 10.
+    # a = 0.
+    # b = 10.
     m = (b-a)/2
     c = (b+a)/2
 
