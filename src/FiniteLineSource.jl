@@ -2,6 +2,7 @@ module FiniteLineSource
 
 export BoreholeSegment, segment_to_segment_step_response, T_ls
 export compute_integral, point_step_response
+export discretization_parameters, frequency_parameters, evolve!
 
 using SpecialFunctions
 using QuadGK

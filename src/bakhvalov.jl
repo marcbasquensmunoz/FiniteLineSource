@@ -16,8 +16,17 @@ function evolve!(fx, x, Δt, q)
     @. fx = fx * exp(-x^2*Δt) + q * (1 - exp(-x^2*Δt)) / x
 end
 
+# I divided the computation of the integrand function evolution into two pieces. 
+function fevolve_1!(fx, x, Δt, q)
+    @. fx = fx * exp(-x^2*Δt) + q * (- exp(-x^2*Δt)) / x
+end
+function fevolve_2!(fx, x, Δt, q)
+    @. fx = fx  + q / x
+end
+
+
 # Computes the integral of F from 0 to Inf at time t = Δt * length(Q) using the Bakhvalov and Vasil’eva method
-function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
+function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3., a =0., b=10.)
     # Total simulation time
     t = Δt * length(Q)
     # The heat wave has not reached points at distance r yet (up to double precision)
@@ -32,9 +41,9 @@ function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
 
     # Global constant 
     C = 1 / (2 * π^2 * r * kg) 
-
-    a = 0
-    b = 10
+    
+    # a = 0.
+    # b = 10.
     m = (b-a)/2
     c = (b+a)/2
 
@@ -63,6 +72,32 @@ function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
     return C * (imag(Iexp) + Ic)
 end
 
+
+# Compute parameters of the discretization that only depends on the interval and the number of integration points 
+function discretization_parameters(a,b,n)
+    xt,w = gausslegendre(n+1)    
+    M = [w[s]*Pl.(xt[s],k) for k=0:n,s=1:n+1]
+    m = (b-a)/2
+    c = (b+a)/2
+    x = @. m * xt + c 
+    return (x=x, m=m, c=c, M=M, n=n, xt=xt, w=w)
+end
+
+function frequency_parameters(dp,ω)
+    Ω = dp.m * ω
+    K =  dp.m * exp(im *ω * dp.c)
+    Ck = [(im)^k *(2k+1) * sqrt(π/(2Ω)) * Bessels.besselj(k+1/2, Ω) for k =0:dp.n] 
+    return (ω=ω, Ω=Ω, Ck=Ck, K=K)
+end
+
+# Computes the integral of F from 0 to Inf at the next time step t = t + Δt using the Bakhvalov and Vasil’eva method given the current value of the function fx
+function compute_integral(last_load, fx, dp, fp, r, kg) 
+    
+    C = 1 / (2 * π^2 * r * kg) 
+    Iexp = sum((fp.Ck .* dp.M) * fx) * fp.K
+    Ic = π/2 * last_load
+    return C * (imag(Iexp) + Ic)
+end
 
 ###################
 ###### Tests ######
