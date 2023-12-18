@@ -90,11 +90,19 @@ function frequency_parameters(dp,ω)
     return (ω=ω, Ω=Ω, Ck=Ck, K=K)
 end
 
+function frequency_parameters_2(dp,ω)
+    Ω = dp.m * ω
+    K =  dp.m * exp(im *ω * dp.c)
+    v = [ sum( [(im)^k *(2k+1) * sqrt(π/(2Ω)) * Bessels.besselj(k+1/2, Ω)*Pl.(dp.xt[s],k) for k =0:dp.n]) * dp.w[s] for s=1:dp.n+1]
+    return (ω=ω, Ω=Ω, v=v, K=K)
+end
+
 # Computes the integral of F from 0 to Inf at the next time step t = t + Δt using the Bakhvalov and Vasil’eva method given the current value of the function fx
 function compute_integral(last_load, fx, dp, fp, r, kg) 
     
     C = 1 / (2 * π^2 * r * kg) 
-    Iexp = sum((fp.Ck .* dp.M) * fx) * fp.K
+    Iexp = sum(fp.v .* fx) * fp.K
+    #Iexp = sum((fp.Ck .* dp.M) * fx) * fp.K
     Ic = π/2 * last_load
     return C * (imag(Iexp) + Ic)
 end

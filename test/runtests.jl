@@ -50,8 +50,9 @@ r, rb = 0.5, 0.1
 #########################
 
 # compute discretization and frequency parameters
-dp = discretization_parameters(0.,10.,300)
+dp = discretization_parameters(0.,10.,100)
 fp = frequency_parameters(dp,r/rb)
+fp = frequency_parameters_2(dp,r/rb)
 
 ##.
 # update function f over time. The update is divided into two pieces one that happens before computing the integral and one that happens after
