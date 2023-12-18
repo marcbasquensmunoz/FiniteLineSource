@@ -1,8 +1,8 @@
-using FastGaussQuadrature
 using Bessels
+using DSP
+using FastGaussQuadrature
 using LegendrePolynomials
 using SpecialFunctions
-using DSP
 
 # Physical parameters
 # Δt  - time step
@@ -22,7 +22,7 @@ function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3.)
     t = Δt * length(Q)
     # The heat wave has not reached points at distance r yet (up to double precision)
     if t < r^2 / (12^2 * α)
-        return 0
+        return 0.
     end
 
     # Computation parameters

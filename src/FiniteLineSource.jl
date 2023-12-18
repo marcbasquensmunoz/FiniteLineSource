@@ -1,6 +1,7 @@
 module FiniteLineSource
 
-export BoreholeSegment, segment_to_segment_step_response, T_ls, compute_integral
+export BoreholeSegment, segment_to_segment_step_response, T_ls
+export compute_integral, point_step_response
 
 using SpecialFunctions
 using QuadGK
