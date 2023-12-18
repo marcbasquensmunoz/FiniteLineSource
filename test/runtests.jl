@@ -52,23 +52,23 @@ r, rb = 0.5, 0.1
 # compute discretization and frequency parameters
 dp = discretization_parameters(0.,10.,100)
 fp = frequency_parameters(dp,r/rb)
-fp = frequency_parameters_2(dp,r/rb)
+#fp = frequency_parameters_2(dp,r/rb)
 
 ##.
 # update function f over time. The update is divided into two pieces one that happens before computing the integral and one that happens after
 fx = zeros(dp.n + 1)
-n = 1000
+n = length(q)
 for q in q[1:n-1]  
     FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q)
-    compute_integral(q, fx, dp, fp, r, kg)
+    compute_integral(fx, dp, fp, r, kg) + π/2 * q
     FiniteLineSource.fevolve_2!(fx, dp.x, Δt̃, q)
 end
 
 FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q[n])
-T_laststep = compute_integral(q[n], fx, dp, fp, r, kg)
+T_laststep = compute_integral(fx, dp, fp, r, kg) + compute_integral_slow(q[n], r, kg) 
 
 ##.
-FiniteLineSource.convolve_step(q[1:n], Δt = 3600, r = 0.5)
+FiniteLineSource.convolve_step(q, Δt = 3600, r = 0.5)[n]
 compute_integral(q[1:n], Δt = 3600., r = 0.5, n = dp.n) 
 # T - FiniteLineSource.convolve_step(q[1:n], Δt = 3600, r = 0.5)
 ##.
@@ -84,8 +84,8 @@ r = 0.5
 # dv= [0.,10.] # Discretization intervals limits
 # nv = [70]      # Number of discretization points
 
-dv= [0.,0.1,10.] # Discretization intervals limits
-nv = [30,70]      # Number of discretization points
+dv= [0., 0.1, 10.] # Discretization intervals limits
+nv = [30, 70]      # Number of discretization points
 # dv= [0.,0.1,10.] # Discretization intervals limits
 # nv = [40]      # Number of discretization points
 Nd = length(nv)         # Number of discretization intervals
@@ -96,7 +96,7 @@ fps = [frequency_parameters(dp,r/rb) for dp in dps] # Frequency parameters for e
 ##.
 fxs = [zeros(dp.n+1) for dp in dps]  # time dependent function for each interval
 
-n = 10
+n = length(q)
 for q in q[1:n-1]  
     for (fx,dp) in zip(fxs,dps)
         FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q)
@@ -108,7 +108,7 @@ for (fx,dp) in zip(fxs,dps)
     FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q[n])
 end
 
-T = sum(compute_integral(q[n], fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps))
+T = sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg)
 # [compute_integral(q[n], fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)]
 ##.
 # function compute_integral_discretized(q, fxs, dps, fps, r, kg)
@@ -117,4 +117,4 @@ T = sum(compute_integral(q[n], fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,
 
 # @time compute_integral_discretized(q[n], fxs, dps, fps, r, kg)
 FiniteLineSource.convolve_step(q[1:n], Δt = 3600, r = r)
-compute_integral(q[1:n], Δt = 3600., r = r, n = 300) 
+compute_integral(q, Δt = 3600., r = r, n = 100, a=0., b=10.) 

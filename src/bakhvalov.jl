@@ -98,14 +98,14 @@ function frequency_parameters_2(dp,ω)
 end
 
 # Computes the integral of F from 0 to Inf at the next time step t = t + Δt using the Bakhvalov and Vasil’eva method given the current value of the function fx
-function compute_integral(last_load, fx, dp, fp, r, kg) 
-    
+function compute_integral(fx, dp, fp, r, kg) 
     C = 1 / (2 * π^2 * r * kg) 
-    Iexp = sum(fp.v .* fx) * fp.K
-    #Iexp = sum((fp.Ck .* dp.M) * fx) * fp.K
-    Ic = π/2 * last_load
-    return C * (imag(Iexp) + Ic)
+    #Iexp = sum(fp.v .* fx) * fp.K
+    Iexp = sum((fp.Ck .* dp.M) * fx) * fp.K
+    return C * imag(Iexp)
 end
+
+compute_integral_slow(q, r, kg) = q / (4 * π * r * kg) 
 
 ###################
 ###### Tests ######
@@ -143,7 +143,7 @@ function convolve_step(Q; Δt, r, α = 10^-6)
     Q = diff([0; Q])
     t = Δt:Δt:Δt*length(Q)
     response = point_step.(t, r, α)
-    return conv(Q, response)[length(Q)]
+    return conv(Q, response)[1:length(Q)]
 end
 
 function compare(Q, Δt, r)
