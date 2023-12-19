@@ -39,10 +39,10 @@ plot(plot1, plot2, plot3, plot4, plot5, plot6, layout=(3,2))
 
 # Plot T as a function of the distance
 r = 0:0.1:50
-Tr = [FiniteLineSource.compute(q, r=i, Δt=3600.) for i in r]
+Tr = [FiniteLineSource.compute(q, r=i, Δt=3600.)[length(q)] for i in r]
 plot(r ./ rb, Tr, label="",  ylims=(-0.03,0.5))
 xlabel!("r̃")
-ylabel!("T (K)")
+ylabel!("T - T₀ (K)")
 
 
 # Plot of temporal series of T
@@ -51,4 +51,13 @@ Ct = FiniteLineSource.convolve_step(q, Δt=Δt, r=1)
 @. rel_err = log(abs((Tt - Ct) / Ct))
 plot(t, rel_err, title="Log of relative error, n=300", label="")
 xlabel!("t (h)")
+ylabel!("log(ϵ)")
+
+
+# Plot of accuracy depending on n
+N = 1:500
+res = FiniteLineSource.convolve_step(q, Δt=Δt, r=1)[length(q)]
+Tn = [FiniteLineSource.compute_series(q, Δt=Δt, r=1, n=n, α=α, kg=kg)[length(q)] for n in N]
+plot(N, log.(abs.(Tn .- res) ./ res), label="Relative error")
+xlabel!("n")
 ylabel!("log(ϵ)")

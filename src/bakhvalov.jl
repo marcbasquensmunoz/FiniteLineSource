@@ -120,7 +120,7 @@ function compute(q; Δt = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6,
     for q in q[1:n-1]  
         for (fx,dp) in zip(fxs,dps)
             fevolve_1!(fx, dp.x, Δt̃, q)
-            append(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg))
+            append!(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q, r, kg))
             fevolve_2!(fx, dp.x, Δt̃, q)
         end
     end
@@ -129,7 +129,7 @@ function compute(q; Δt = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6,
         fevolve_1!(fx, dp.x, Δt̃, q[n])
     end
     
-    append(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg))
+    append!(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg))
     return T
 end
 
