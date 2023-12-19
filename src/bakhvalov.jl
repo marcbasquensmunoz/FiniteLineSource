@@ -161,12 +161,12 @@ end
 
 ###### Check correctness against convolution ######
 
-point_step(t, r, α = 10^-6, kg = 3.) = erfc(r/(2*sqrt(t*α))) / (4*π*r*kg)
+point_step_response(t, r, α = 10^-6, kg = 3.) = erfc(r/(2*sqrt(t*α))) / (4*π*r*kg)
 
 function convolve_step(Q; Δt, r, α = 10^-6)
     Q = diff([0; Q])
     t = Δt:Δt:Δt*length(Q)
-    response = point_step.(t, r, α)
+    response = point_step_response.(t, r, α)
     return conv(Q, response)[1:length(Q)]
 end
 
