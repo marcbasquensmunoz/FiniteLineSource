@@ -109,17 +109,18 @@ compute_integral_slow(q, r, kg) = q / (4 * π * r * kg)
 
 function compute(q; Δt = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6, rb = 0.1, kg = 3.)
     Δt̃ = α*Δt/rb^2
-    Nd = length(nv) 
     
     dps = [discretization_parameters(a,b,n) for (a,b,n) in zip(dv[1:end-1],dv[2:end],nv)] # Discretization parameters for each interval
     fps = [frequency_parameters_2(dp, r/rb) for dp in dps] # Frequency parameters for each interval
     
     fxs = [zeros(dp.n+1) for dp in dps]  # time dependent function for each interval
     
+    T = []
     n = length(q)
     for q in q[1:n-1]  
         for (fx,dp) in zip(fxs,dps)
             fevolve_1!(fx, dp.x, Δt̃, q)
+            append(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg))
             fevolve_2!(fx, dp.x, Δt̃, q)
         end
     end
@@ -128,7 +129,29 @@ function compute(q; Δt = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6,
         fevolve_1!(fx, dp.x, Δt̃, q[n])
     end
     
-    return sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg)
+    append(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg))
+    return T
+end
+
+function compute_series(q; Δt = 3600., r = 1., n=100, α = 10^-6, rb = 0.1, kg = 3.)
+    Δt̃ = α*Δt/rb^2
+
+    dp = discretization_parameters(0.,10.,n)
+    fp = frequency_parameters_2(dp,r/rb)
+
+    fx = zeros(dp.n + 1)
+    qn = length(q)
+    series = []
+
+    for q in q[1:qn-1]  
+        FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q)
+        append!(series, compute_integral(fx, dp, fp, r, kg) + compute_integral_slow(q, r, kg))
+        FiniteLineSource.fevolve_2!(fx, dp.x, Δt̃, q)
+    end
+
+    FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q[qn])
+    T_laststep = compute_integral(fx, dp, fp, r, kg) + compute_integral_slow(q[qn], r, kg) 
+    append!(series, T_laststep)
 end
 
 ###################
