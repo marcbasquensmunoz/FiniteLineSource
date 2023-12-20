@@ -3,6 +3,7 @@ using DSP
 using FastGaussQuadrature
 using LegendrePolynomials
 using SpecialFunctions
+using LinearAlgebra
 
 # Physical parameters
 # Δt  - time step
@@ -17,10 +18,11 @@ function evolve!(fx, x, Δt, q)
 end
 
 # I divided the computation of the integrand function evolution into two pieces. 
-function fevolve_1!(fx, x, Δt, q)
-    @. fx = fx * exp(-x^2*Δt) + q * (- exp(-x^2*Δt)) / x
+function fevolve_1!(fx, x, CΔt, q)
+    # @. fx = fx * exp(-x^2*Δt) + q * (- exp(-x^2*Δt)) / x
+    @. fx = CΔt * (fx - q/x)
 end
-function fevolve_2!(fx, x, Δt, q)
+function fevolve_2!(fx, x, q)
     @. fx = fx  + q / x
 end
 
@@ -100,10 +102,11 @@ end
 # Computes the integral of F from 0 to Inf at the next time step t = t + Δt using the Bakhvalov and Vasil’eva method given the current value of the function fx
 function compute_integral(fx, dp, fp, r, kg) 
     C = 1 / (2 * π^2 * r * kg) 
-    Iexp = sum(fp.v .* fx) * fp.K
-    #Iexp = sum((fp.Ck .* dp.M) * fx) * fp.K
+    # Iexp = sum(fp.v .* fx) * fp.K
+    Iexp = dot(fx , fp.v* fp.K) 
     return C * imag(Iexp)
 end
+
 
 compute_integral_slow(q, r, kg) = q / (4 * π * r * kg) 
 
@@ -129,6 +132,54 @@ function compute(q; Δt = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6,
     end
     
     return sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg)
+end
+
+
+
+# precompute all the parameters necessary for the computation
+function precompute_parameters(r̃, dv = [0., 10.], nv = [100])
+    dps = [discretization_parameters(a,b,n) for (a,b,n) in zip(dv[1:end-1],dv[2:end],nv)] # Discretization parameters for each interval
+    fps = [frequency_parameters_2(dp, r̃) for dp in dps] # Frequency parameters for each interval
+    fxs = [zeros(dp.n+1) for dp in dps]  # time dependent function for each interval
+    
+    x  = reduce(vcat, (dp.x for dp in dps))
+    fx = reduce(vcat, fxs)
+    v  = reduce(vcat, (fp.v * fp.K for fp in fps))
+    
+    # return dps,fps,fxs
+    return x,fx,v
+end
+
+# advance f through the whole load history q
+function fevolve_throughhistory!(fx, x, CΔt, q)
+    for q in q
+            fevolve_1!(fx, x, CΔt, q)
+            fevolve_2!(fx, x, q)
+    end
+    return nothing
+end
+
+# advance f one step and compute integral value 
+function compute_integral_and_advance_one_step!(fx, q, v, C, x, CΔt, r, kg)
+    fevolve_1!(fx, x, CΔt, q)
+    Iv = C * imag(dot(fx , v)) + compute_integral_slow(q, r, kg) #compute_integral(fx, v, C)
+    fevolve_2!(fx, x, q)    
+    # Iv += compute_integral_slow(q, r, kg)
+    return Iv
+end 
+
+function compute_integral_throughthistory!(I, q, fx, v, C, x, r, kg, Δt̃)
+    N = length(I) 
+    CΔt = @. exp(-x^2*Δt̃)
+        for k=1:N 
+            # @views @inbounds I[k] = compute_integral_and_advance_one_step!(fx, q[k], v, C, x, r, kg, Δt̃)
+
+            @views @inbounds fevolve_1!(fx, x, CΔt, q[k])
+            @views @inbounds I[k] = C * imag(dot(fx , v)) + compute_integral_slow(q[k], r, kg)  #compute_integral(fx, v, C)
+            @views @inbounds fevolve_2!(fx, x, q[k])    
+        end
+    
+       return nothing
 end
 
 ###################
