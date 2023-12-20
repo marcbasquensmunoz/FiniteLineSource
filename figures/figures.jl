@@ -37,27 +37,59 @@ plot6 = plot_F(40000)
 #Plot of F at various times
 plot(plot1, plot2, plot3, plot4, plot5, plot6, layout=(3,2))
 
+
 # Plot T as a function of the distance
 r = 0:0.1:50
-Tr = [FiniteLineSource.compute(q, r=i, Δt=3600.)[length(q)] for i in r]
+Tr = [FiniteLineSource.compute_series(q, r=i, Δt=3600., n=400)[length(q)] for i in r]
 plot(r ./ rb, Tr, label="",  ylims=(-0.03,0.5))
 xlabel!("r̃")
 ylabel!("T - T₀ (K)")
 
+r = 0:1:50
+function compute_rel_err_r(q, nv, dv)
+    Tr = [FiniteLineSource.compute(q, r=i, Δt=3600., nv=nv, dv=dv) for i in r]
+    Cr = [FiniteLineSource.convolve_step(q, Δt=Δt, r=i)[length(q)] for i in r]
+    return @. log(abs((Tr - Cr) / Cr))
+end
+rel_err_r_1 = compute_rel_err_r(q, Int64.(100*ones(6)), [0., 0.1, 0.2, 0.5, 1., 5., 10.])
+rel_err_r_2 = compute_rel_err_r(q, Int64.(200*ones(6)), [0., 0.1, 0.2, 0.5, 1., 5., 10.])
+rel_err_r_3 = compute_rel_err_r(q, Int64.(400*ones(6)), [0., 0.1, 0.2, 0.5, 1., 5., 10.])
+plot(r ./ rb, rel_err_r_1, label="n=100", ylims=(-35,0))
+plot!(r ./ rb, rel_err_r_2, label="n=200")
+plot!(r ./ rb, rel_err_r_3, label="n=400")
+xlabel!("r̃")
+ylabel!("log(ϵ)")
+
 
 # Plot of temporal series of T
-Tt = FiniteLineSource.compute_series(q, Δt=Δt, r=1, n=300, α=α, kg=kg)
-Ct = FiniteLineSource.convolve_step(q, Δt=Δt, r=1)
-@. rel_err = log(abs((Tt - Ct) / Ct))
-plot(t, rel_err, title="Log of relative error, n=300", label="")
+function compute_rel_err(q, r, b=10.)
+    Tt = FiniteLineSource.compute_series(q, Δt=Δt, r=r, n=400, α=α, kg=kg, b=b)
+    Ct = FiniteLineSource.convolve_step(q, Δt=Δt, r=r)
+    return @. log(abs((Tt - Ct) / Ct))
+end
+rel_err_1 = compute_rel_err(q, 1)
+rel_err_2 = compute_rel_err(q, 5)
+rel_err_3 = compute_rel_err(q, 10, 7)
+tind = 1:50:length(t)
+plot(t[tind], rel_err_1[tind], title="n=400", label="r̃ = 10")
+plot!(t[tind], rel_err_2[tind], label="r̃ = 50")
+plot!(t[tind], rel_err_3[tind], label="r̃ = 100")
 xlabel!("t (h)")
 ylabel!("log(ϵ)")
 
 
 # Plot of accuracy depending on n
-N = 1:500
-res = FiniteLineSource.convolve_step(q, Δt=Δt, r=1)[length(q)]
-Tn = [FiniteLineSource.compute_series(q, Δt=Δt, r=1, n=n, α=α, kg=kg)[length(q)] for n in N]
-plot(N, log.(abs.(Tn .- res) ./ res), label="Relative error")
+N = 1:5:500
+function compute_rel_err_n(q, r)
+    res = FiniteLineSource.convolve_step(q, Δt=Δt, r=r)[length(q)]
+    Tn = [FiniteLineSource.compute(q, Δt=Δt, r=r, α=α, kg=kg, nv=Int64.(n*ones(6)), dv=[0., 0.1, 0.2, 0.5, 1., 5., 10.]) for n in N]
+    return @. log(abs((Tn - res) / res))
+end
+rel_err_n_1 = compute_rel_err_n(q, 1)
+rel_err_n_2 = compute_rel_err_n(q, 5)
+rel_err_n_3 = compute_rel_err_n(q, 10)
+plot(N, rel_err_n_1, label="r̃ = 10")
+plot!(N, rel_err_n_2, label="r̃ = 50")
+plot!(N, rel_err_n_3, label="r̃ = 100")
 xlabel!("n")
 ylabel!("log(ϵ)")

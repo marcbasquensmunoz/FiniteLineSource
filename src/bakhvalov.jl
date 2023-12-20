@@ -115,12 +115,10 @@ function compute(q; Δt = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6,
     
     fxs = [zeros(dp.n+1) for dp in dps]  # time dependent function for each interval
     
-    T = []
     n = length(q)
     for q in q[1:n-1]  
         for (fx,dp) in zip(fxs,dps)
             fevolve_1!(fx, dp.x, Δt̃, q)
-            append!(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q, r, kg))
             fevolve_2!(fx, dp.x, Δt̃, q)
         end
     end
@@ -129,14 +127,13 @@ function compute(q; Δt = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6,
         fevolve_1!(fx, dp.x, Δt̃, q[n])
     end
     
-    append!(T, sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg))
-    return T
+    return sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg)
 end
 
-function compute_series(q; Δt = 3600., r = 1., n=100, α = 10^-6, rb = 0.1, kg = 3.)
+function compute_series(q; Δt = 3600., r = 1., n=100, α = 10^-6, rb = 0.1, kg = 3., b=10.)
     Δt̃ = α*Δt/rb^2
 
-    dp = discretization_parameters(0.,10.,n)
+    dp = discretization_parameters(0.,b,n)
     fp = frequency_parameters_2(dp,r/rb)
 
     fx = zeros(dp.n + 1)
