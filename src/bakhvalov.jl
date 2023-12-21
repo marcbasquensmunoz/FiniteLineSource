@@ -6,20 +6,19 @@ using SpecialFunctions
 using LinearAlgebra
 
 # Physical parameters
-# t  - time step
+# Δt  - time step
 # r   - distance to the borehole
 # rb  - borehole radius
-#    - thermal diffusivity
+# α   - thermal diffusivity
 # kg  - thermal conductivity
 
 # Computes F in the next time step from the previous one
-function evolve!(fx, x, t, q)
-    @. fx = fx * exp(-x^2*t) + q * (1 - exp(-x^2*t)) / x
+function evolve!(fx, x, Δt, q)
+    @. fx = fx * exp(-x^2*Δt) + q * (1 - exp(-x^2*Δt)) / x
 end
 
 # I divided the computation of the integrand function evolution into two pieces. 
 function fevolve_1!(fx, x, Ct, q)
-    # @. fx = fx * exp(-x^2*t) + q * (- exp(-x^2*t)) / x
     @. fx = Ct * (fx - q/x)
 end
 function fevolve_2!(fx, x, q)
@@ -28,21 +27,21 @@ end
 
 
 # Computes the integral of F from 0 to Inf at time t = t * length(Q) using the Bakhvalov and Vasileva method
-function compute_integral(Q; n=100, r, t,  = 10^-6, rb = 0.1, kg = 3., a =0., b=10.)
+function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3., a =0., b=10.)
     # Total simulation time
-    t = t * length(Q)
+    t = Δt * length(Q)
     # The heat wave has not reached points at distance r yet (up to double precision)
-    if t < r^2 / (12^2 * )
+    if t < r^2 / (12^2 * α)
         return 0.
     end
 
     # Computation parameters
-    t = /rb^2 * t   # Non-dimensional time step
-    r = r/rb           # Non-dimensional distance
-     = r              # Oscillation frequency of the integrand
+    Δt̃ = /rb^2 * Δt   # Non-dimensional time step
+    r̃ = r/rb           # Non-dimensional distance
+    ω = r̃              # Oscillation frequency of the integrand
 
     # Global constant 
-    C = 1 / (2 * ^2 * r * kg) 
+    C = 1 / (2 * π^2 * r * kg) 
     
     # a = 0.
     # b = 10.
@@ -56,21 +55,21 @@ function compute_integral(Q; n=100, r, t,  = 10^-6, rb = 0.1, kg = 3., a =0., b=
     fx = zeros(n+1)
 
     for q in Q
-        evolve!(fx, x, t, q)
+        evolve!(fx, x, Δt̃, q)
     end
 
     last_load = Q[length(Q)] 
     @. fx = fx - last_load / x
     
-     =  * m
+    Ω = ω * m
     Iexp = zeros(n+1)
     for k in 0:n
-        Iexp += (im)^(k) * (2k+1) * Bessels.besselj(k+1/2, ) * Pl.(xt, k)
+        Iexp += (im)^(k) * (2k+1) * Bessels.besselj(k+1/2, Ω) * Pl.(xt, k)
     end
-    Iexp = sum(w .* Iexp .* fx) * sqrt(/(2))
-    Iexp *= m*exp(im**c)
+    Iexp = sum(w .* Iexp .* fx) * sqrt(π/(2Ω))
+    Iexp *= m*exp(im*ω*c)
 
-    Ic = /2*last_load
+    Ic = π/2*last_load
     return C * (imag(Iexp) + Ic)
 end
 
@@ -85,33 +84,26 @@ function discretization_parameters(a,b,n)
     return (x=x, m=m, c=c, M=M, n=n, xt=xt, w=w)
 end
 
-function frequency_parameters(dp,)
-     = dp.m * 
-    K =  dp.m * exp(im * * dp.c)
-    Ck = [(im)^k *(2k+1) * sqrt(/(2)) * Bessels.besselj(k+1/2, ) for k =0:dp.n] 
-    return (=, =, Ck=Ck, K=K)
+function frequency_parameters_2(dp, ω)
+    Ω = dp.m * ω
+    K =  dp.m * exp(im * ω * dp.c)
+    v = [ sum( [(im)^k *(2k+1) * sqrt(π/(2Ω)) * Bessels.besselj(k+1/2, Ω)*Pl.(dp.xt[s],k) for k =0:dp.n]) * dp.w[s] for s=1:dp.n+1]
+    return (ω=ω, Ω=Ω, v=v, K=K)
 end
 
-function frequency_parameters_2(dp,)
-     = dp.m * 
-    K =  dp.m * exp(im * * dp.c)
-    v = [ sum( [(im)^k *(2k+1) * sqrt(/(2)) * Bessels.besselj(k+1/2, )*Pl.(dp.xt[s],k) for k =0:dp.n]) * dp.w[s] for s=1:dp.n+1]
-    return (=, =, v=v, K=K)
-end
-
-# Computes the integral of F from 0 to Inf at the next time step t = t + t using the Bakhvalov and Vasileva method given the current value of the function fx
+# Computes the integral of F from 0 to Inf at the next time step t = t + Δt using the Bakhvalov and Vasileva method given the current value of the function fx
 function compute_integral(fx, dp, fp, r, kg) 
-    C = 1 / (2 * ^2 * r * kg) 
+    C = 1 / (2 * π^2 * r * kg) 
     # Iexp = sum(fp.v .* fx) * fp.K
     Iexp = dot(fx , fp.v* fp.K) 
     return C * imag(Iexp)
 end
 
 
-compute_integral_slow(q, r, kg) = q / (4 *  * r * kg) 
+compute_integral_slow(q, r, kg) = q / (4 * π * r * kg) 
 
-function compute(q; t = 3600., r = 1., dv = [0., 10.], nv = [100],  = 10^-6, rb = 0.1, kg = 3.)
-    t = *t/rb^2
+function compute(q; t = 3600., r = 1., dv = [0., 10.], nv = [100], α = 10^-6, rb = 0.1, kg = 3.)
+    Δt̃ = α*Δt/rb^2
     
     dps = [discretization_parameters(a,b,n) for (a,b,n) in zip(dv[1:end-1],dv[2:end],nv)] # Discretization parameters for each interval
     fps = [frequency_parameters_2(dp, r/rb) for dp in dps] # Frequency parameters for each interval
@@ -121,20 +113,20 @@ function compute(q; t = 3600., r = 1., dv = [0., 10.], nv = [100],  = 10^-6, rb 
     n = length(q)
     for q in q[1:n-1]  
         for (fx,dp) in zip(fxs,dps)
-            fevolve_1!(fx, dp.x, t, q)
-            fevolve_2!(fx, dp.x, t, q)
+            fevolve_1!(fx, dp.x, Δt̃, q)
+            fevolve_2!(fx, dp.x, q)
         end
     end
     
     for (fx,dp) in zip(fxs,dps)
-        fevolve_1!(fx, dp.x, t, q[n])
+        fevolve_1!(fx, dp.x, Δt̃, q[n])
     end
     
     return sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg)
 end
 
-function compute_series(q; t = 3600., r = 1., n=100,  = 10^-6, rb = 0.1, kg = 3., b=10.)
-    t = *t/rb^2
+function compute_series(q; Δt = 3600., r = 1., n=100, α = 10^-6, rb = 0.1, kg = 3., b=10.)
+    Δt̃ = α*Δt/rb^2
 
     dp = discretization_parameters(0.,b,n)
     fp = frequency_parameters_2(dp,r/rb)
@@ -144,12 +136,12 @@ function compute_series(q; t = 3600., r = 1., n=100,  = 10^-6, rb = 0.1, kg = 3.
     series = []
 
     for q in q[1:qn-1]  
-        FiniteLineSource.fevolve_1!(fx, dp.x, t, q)
+        FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q)
         append!(series, compute_integral(fx, dp, fp, r, kg) + compute_integral_slow(q, r, kg))
-        FiniteLineSource.fevolve_2!(fx, dp.x, t, q)
+        FiniteLineSource.fevolve_2!(fx, dp.x, q)
     end
 
-    FiniteLineSource.fevolve_1!(fx, dp.x, t, q[qn])
+    FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q[qn])
     T_laststep = compute_integral(fx, dp, fp, r, kg) + compute_integral_slow(q[qn], r, kg) 
     append!(series, T_laststep)
 end
@@ -208,11 +200,11 @@ end
 
 ###### Check correctness against analytical solutions ######
 
-# t = 3600, rb = 0.1,  = 10^-6, kg = 3
+# Δt = 3600, rb = 0.1, α = 10^-6, kg = 3
 
 # For Q = [1]
-# Ie = - erf( r / sqrt(4**t) ) / (4**r*kg)
-# I = erfc( r / sqrt(4**t) ) / (4**r*kg)
+# Ie = - erf( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
+# I = erfc( r / sqrt(4*α*Δt) ) / (4*π*r*kg)
 
 # r = 1
 # Ie = -0.026525823848649224
@@ -224,7 +216,7 @@ end
 
 
 # For Q = [1, zeros(n)]
-# I = ( erf( r / sqrt(n*4**t) ) - erf( r / sqrt((n+1)*4**t) ) ) / (4**r*kg) 
+# I = ( erf( r / sqrt(n*4*α*Δt) ) - erf( r / sqrt((n+1)*4*α*Δt) ) ) / (4*π*r*kg) 
 
 # For n = 5, r = 0.1
 # I = 0.008558835281496709
@@ -232,18 +224,18 @@ end
 
 ###### Check correctness against convolution ######
 
-point_step_response(t, r,  = 10^-6, kg = 3.) = erfc(r/(2*sqrt(t*))) / (4**r*kg)
+point_step_response(t, r, α = 10^-6, kg = 3.) = erfc(r/(2*sqrt(t*α))) / (4*π*r*kg)
 
-function convolve_step(Q; t, r,  = 10^-6)
+function convolve_step(Q; Δt, r, α = 10^-6)
     Q = diff([0; Q])
-    t = t:t:t*length(Q)
-    response = point_step_response.(t, r, )
+    t = Δt:Δt:Δt*length(Q)
+    response = point_step_response.(t, r, α)
     return conv(Q, response)[1:length(Q)]
 end
 
-function compare(Q, t, r)
-    println(convolve_step(Q, t = t, r = r))
-    println(compute_integral(Q, t = t, r = r))
+function compare(Q, Δt, r)
+    println(convolve_step(Q, Δt = Δt, r = r))
+    println(compute_integral(Q, Δt = Δt, r = r))
 end 
 
 compare([1], 3600, 0.1)
