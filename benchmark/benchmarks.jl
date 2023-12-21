@@ -5,22 +5,37 @@ using FiniteLineSource
 
 SUITE = BenchmarkGroup()
 
-SUITE["fls"] = BenchmarkGroup(["string", "unicode"])
+SUITE["non-historical"] = BenchmarkGroup()
 
-function seg_to_seg()
-    s1 = BoreholeSegment(0, 0, 0.5, 2, 0.1)
-    s2 = BoreholeSegment(0, 1, 1, 5, 0.1)
+function compute_integral_throught_history()
+    q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
 
-    t = 0:10^3:10^7
-    response(x) = segment_to_segment_step_response(x, source=s1, receptor=s2)
-    result = response.(t)
+    α, kg = 10^-6, 3.
+    r, rb = 0.5, 0.1
+    Δt = 3600.
+    Δt̃ = α*Δt/rb^2
+    C = 1 / (2 * π^2 * r * kg) 
+
+    I = zeros(length(q))
+    x, fx, v = precompute_parameters(r/rb)
+    compute_integral_throught_history!(I, q, fx, v, C, x, r, kg, Δt̃)
 end
 
-function T_field()
-    s = BoreholeSegment(0, 0, 0.5, 2, 0.1)
-    points = [(i, j) for i in 0:0.1:2, j in 0.1:0.1:2]
-    points = T_ls.(last.(points), first.(points), 10, Ref(s))
+function compute_convolution()
+    q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
+
+    FiniteLineSource.convolve_step(q, Δt = 3600, r = 0.5)
 end
 
-SUITE["fls"]["seg2seg"] = @benchmarkable seg_to_seg()
-SUITE["fls"]["T_field"] = @benchmarkable T_field()
+function compute_historical_convolution()
+    q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
+
+    for i in 1:length(q)
+        @views FiniteLineSource.convolve_step(q[1:i], Δt = 3600, r = 0.5)
+    end
+end
+
+
+SUITE["non-historical"]["compute_integral_throught_history"] = @benchmarkable compute_integral_throught_history()
+SUITE["non-historical"]["compute_convolution"] = @benchmarkable compute_convolution()
+SUITE["non-historical"]["compute_historical_convolution"] = @benchmarkable compute_historical_convolution()

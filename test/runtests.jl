@@ -1,120 +1,151 @@
 using FiniteLineSource
+import FiniteLineSource: compute_integral_slow, f_evolve_1!, f_evolve_2!, compute_integral_oscillatory, convolve_step, discretization_parameters, frequency_parameters
 using Test
 using SpecialFunctions
 
-# include("Aqua.jl")
+include("Aqua.jl")
 
 const ϵ = 5*10^-14
-# @testset "segment_to_segment_step_response" begin
-#     source_segment = BoreholeSegment(0, 0, 1, 5, 0.5)
-#     receptor_segment = BoreholeSegment(0, 1, 1, 5, 0.5)
-#     @test segment_to_segment_step_response(0, source=source_segment, receptor=receptor_segment)        ≈ 0        atol = 5*10^-20
-#     @test segment_to_segment_step_response(100, source=source_segment, receptor=receptor_segment)      ≈ 0        atol = 5*10^-20
-#     @test segment_to_segment_step_response(1000, source=source_segment, receptor=receptor_segment)     ≈ 0        atol = 5*10^-10
-#     @test segment_to_segment_step_response(100000, source=source_segment, receptor=receptor_segment)   ≈ 0.131890 atol = 5*10^-6
-#     @test segment_to_segment_step_response(10000000, source=source_segment, receptor=receptor_segment) ≈ 1.074141 atol = 5*10^-6
-# end
 
-@testset "Bakhvalov_Vasil'eva_analytical" begin
-    short_step_response(n, t, r, α = 10^-6, kg = 3.) = ( erf( r / sqrt(n*4*α*t) ) - erf( r / sqrt((n+1)*4*α*t) ) ) / (4*π*r*kg) 
+@testset "point_step_response" begin
+    @test point_step_response(3600, 1, 10^-6, 3)       ≈ 0                     atol = ϵ
+    @test point_step_response(3600, 0.5, 10^-6, 3)     ≈ 2.0173737265e-10      atol = ϵ
+    @test point_step_response(3600, 0.1, 10^-6, 3)     ≈ 0.06328871361998596   atol = ϵ
+    @test point_step_response(3600, 0.05, 10^-6, 3)    ≈ 0.29480258983068475   atol = ϵ
+    @test point_step_response(3600, 0.01, 10^-6, 3)    ≈ 2.4037320017694954    atol = ϵ
 
-    @test compute_integral([1], Δt = 3600, r = 1)               ≈ point_step_response(3600, 1)              atol = ϵ
-    @test compute_integral([1], Δt = 3600, r = 0.1)             ≈ point_step_response(3600, 0.1)            atol = ϵ
-    @test compute_integral([1; zeros(5)], Δt = 3600, r = 0.1)   ≈ short_step_response(5, 3600, 0.1)         atol = ϵ
+    @test point_step_response(3600, 0.1, 5*10^-6, 3)   ≈ 0.15866725326935396   atol = ϵ
+    @test point_step_response(3600, 0.05, 5*10^-6, 3)  ≈ 0.42024724353889786   atol = ϵ
+    @test point_step_response(3600, 0.01, 5*10^-6, 3)  ≈ 2.5410870574168927    atol = ϵ
+
+    @test point_step_response(3600*24, 0.1, 10^-6, 3)  ≈ 0.21483109039800657   atol = ϵ
+    @test point_step_response(3600*24, 0.05, 10^-6, 3) ≈ 0.4797249950834168    atol = ϵ
+    @test point_step_response(3600*24, 0.01, 10^-6, 3) ≈ 2.6016733120703512    atol = ϵ
 end
 
-@testset "Bakhvalov_Vasil'eva_convolution" begin
-    error(Q; Δt, r) = compute_integral(Q, Δt = Δt, r = r) - FiniteLineSource.convolve_step(Q, Δt = Δt, r = r)   
+@testset "compute_integral_slow" begin
+    @test compute_integral_slow(1, 1, 3)   ≈ 0.026525823848649224   atol = ϵ
+    @test compute_integral_slow(10, 1, 3)  ≈ 0.26525823848649224    atol = ϵ
+    @test compute_integral_slow(100, 1, 3) ≈ 2.6525823848649224     atol = ϵ
 
-    @test error([1], Δt = 3600, r = 1)                  ≈ 0   atol = ϵ
-    @test error([1], Δt = 3600, r = 0.1)                ≈ 0   atol = ϵ
-    @test error([1; zeros(5)], Δt = 3600, r = 0.1)      ≈ 0   atol = ϵ
+    @test compute_integral_slow(1, 5, 3)   ≈ 0.005305164769729845   atol = ϵ
+    @test compute_integral_slow(10, 5, 3)  ≈ 0.05305164769729845    atol = ϵ
+    @test compute_integral_slow(100, 5, 3) ≈ 0.5305164769729845     atol = ϵ
 end
 
-# integral over an interval is equal to integral over sub-intervals (Currently Failing!)
-@test compute_integral([1; zeros(5)], Δt = 3600, r = 0.1, a=0., b=10.)  ≈ compute_integral([1; zeros(5)], Δt = 3600, r = 1, a=0.,b=5.) +  compute_integral([1; zeros(5)], Δt = 3600, r = 1, a=5.,b=10.)
+@testset "discretization_parameters" begin
+    @testset "0_10_100" begin
+        dp = discretization_parameters(0, 10, 100)
+        @test dp.m == 5.0        
+        @test dp.c == 5.0        
+        @test dp.n == 100
+        @test length(dp.w) == 101 && length(dp.x) == 101 && length(dp.xt) == 101 
+        @test findmin(dp.xt)[1] > -1 && findmax(dp.xt)[1] < 1
+        @test sort(dp.xt) == dp.xt
+        @test findmin(dp.x)[1] > 0 && findmin(dp.x)[1] < 0.1 && findmax(dp.x)[1] < 10 &&findmax(dp.x)[1] > 9.9
+        @test sort(dp.x) == dp.x
+        @test size(dp.M) == (101, 101)
+    end 
 
-####################
-## Longer load tests
-##.
-q = [20 *sin(2π*i/8760) + 5. for i=1:1000]
-# @test compute_integral(q, Δt = 3600., r = 0.1, n = 300) - FiniteLineSource.convolve_step(q, Δt = 3600, r = 0.1) ≈ 0   atol = 5*10^-14
-
-α, kg = 10^-6, 3.
-r, rb = 0.5, 0.1
-Δt = 3600.
-Δt̃ = α*Δt/rb^2
-
-#########################
-# # Single interval
-#########################
-
-# compute discretization and frequency parameters
-dp = discretization_parameters(0.,10.,100)
-fp = frequency_parameters(dp,r/rb)
-#fp = frequency_parameters_2(dp,r/rb)
-
-##.
-# update function f over time. The update is divided into two pieces one that happens before computing the integral and one that happens after
-fx = zeros(dp.n + 1)
-n = length(q)
-for q in q[1:n-1]  
-    FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q)
-    compute_integral(fx, dp, fp, r, kg) + π/2 * q
-    FiniteLineSource.fevolve_2!(fx, dp.x, Δt̃, q)
+    @testset "2_7_200" begin
+        dp = discretization_parameters(2, 7, 200)
+        @test dp.m == 2.5        
+        @test dp.c == 4.5        
+        @test dp.n == 200
+        @test length(dp.w) == 201 && length(dp.x) == 201 && length(dp.xt) == 201 
+        @test findmin(dp.xt)[1] > -1 && findmax(dp.xt)[1] < 1
+        @test sort(dp.xt) == dp.xt
+        @test findmin(dp.x)[1] > 2 && findmin(dp.x)[1] < 2.1 && findmax(dp.x)[1] < 7 &&findmax(dp.x)[1] > 6.9
+        @test sort(dp.x) == dp.x
+        @test size(dp.M) == (201, 201)
+    end 
 end
 
-FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q[n])
-T_laststep = compute_integral(fx, dp, fp, r, kg) + compute_integral_slow(q[n], r, kg) 
-
-##.
-FiniteLineSource.convolve_step(q, Δt = 3600, r = 0.5)[n]
-compute_integral(q[1:n], Δt = 3600., r = 0.5, n = dp.n) 
-# T - FiniteLineSource.convolve_step(q[1:n], Δt = 3600, r = 0.5)
-##.
-
-#########################
-# # Discretized Intervals
-#########################
-r = 0.5 
-
-# dv= [0.,0.06,1.,3.,10.] # Discretization intervals limits
-# nv = [60,50,40,50]      # Number of discretization points within a limit
-
-# dv= [0.,10.] # Discretization intervals limits
-# nv = [70]      # Number of discretization points
-
-dv= [0., 0.1, 10.] # Discretization intervals limits
-nv = [30, 70]      # Number of discretization points
-# dv= [0.,0.1,10.] # Discretization intervals limits
-# nv = [40]      # Number of discretization points
-Nd = length(nv)         # Number of discretization intervals
-
-dps = [discretization_parameters(a,b,n) for (a,b,n) in zip(dv[1:end-1],dv[2:end],nv)] # Discretization parameters for each interval
-fps = [frequency_parameters(dp,r/rb) for dp in dps] # Frequency parameters for each interval
-
-##.
-fxs = [zeros(dp.n+1) for dp in dps]  # time dependent function for each interval
-
-n = length(q)
-for q in q[1:n-1]  
-    for (fx,dp) in zip(fxs,dps)
-        FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q)
-        FiniteLineSource.fevolve_2!(fx, dp.x, Δt̃, q)
+@testset "frequency_parameters" begin
+    @testset "0_10_100_10" begin
+        dp = discretization_parameters(0, 10, 100)
+        fp = frequency_parameters(dp, 10.)
+        @test fp.ω == 10.
+        @test fp.Ω == 50.
+        @test length(fp.v) == 101
+        @test fp.K ≈ 4.824830142460566 - 1.3118742685196438im  atol = ϵ
     end
 end
 
-for (fx,dp) in zip(fxs,dps)
-    FiniteLineSource.fevolve_1!(fx, dp.x, Δt̃, q[n])
+@testset "precompute_parameters" begin
+    @testset "10" begin
+        x, fx, v = precompute_parameters(10)
+        @test length(fx) == 101
+        @test length(x) == 101
+        @test length(v) == 101
+
+        @test findmin(fx)[1] == 0 && findmax(fx)[1] == 0 
+        @test findmin(x)[1] > 0 &&  findmin(x)[1] < 0.1 && findmax(x)[1] < 10 && findmax(x)[1] > 9.9 
+        @test sort(x) == x
+    end
+
+    @testset "10, [0., 1., 10.], [100, 100]" begin
+        x, fx, v = precompute_parameters(10, [0., 1., 10.], [100, 100])
+        @test length(fx) == 202
+        @test length(x) == 202
+        @test length(v) == 202
+
+        @test findmin(fx)[1] == 0 && findmax(fx)[1] == 0 
+        @test @views findmin(x[1:101])[1] > 0 &&  findmin(x[1:101])[1] < 0.1 && findmax(x[1:101])[1] < 1 && findmax(x[1:101])[1] > 0.9
+        @test @views findmin(x[102:202])[1] > 1 &&  findmin(x[102:202])[1] < 1.1 && findmax(x[102:202])[1] < 10 && findmax(x[102:202])[1] > 9.9 
+        @test sort(x) == x
+    end
 end
 
-T = sum(compute_integral(fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)) + compute_integral_slow(q[n], r, kg)
-# [compute_integral(q[n], fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps)]
-##.
-# function compute_integral_discretized(q, fxs, dps, fps, r, kg)
-#     sum(compute_integral(q[n], fx, dp, fp, r, kg) for (fx,dp,fp) in zip(fxs,dps,fps))
-# end
+@testset "f_evolve_1!" begin
+    @testset "1" begin
+        x, fx, v = precompute_parameters(1)
+        old_x = copy(x)
+        old_fx = copy(fx)
+        Ct = @. exp(-x^2 * 0.36)
+        f_evolve_1!(fx, x, Ct, 1)
+        @test old_x == x
+        @test old_fx != fx
+    end
+end
 
-# @time compute_integral_discretized(q[n], fxs, dps, fps, r, kg)
-FiniteLineSource.convolve_step(q[1:n], Δt = 3600, r = r)
-compute_integral(q, Δt = 3600., r = r, n = 100, a=0., b=10.) 
+@testset "f_evolve_2!" begin
+    @testset "1" begin
+        x, fx, v = precompute_parameters(1)
+        old_x = copy(x)
+        old_fx = copy(fx)
+        Ct = @. exp(-x^2 * 0.36)
+        f_evolve_2!(fx, x, 1)
+        @test old_x == x
+        @test old_fx != fx
+    end
+end
+
+@testset "compute_integral_oscillatory" begin
+    @testset "im .* ones(100) ones(100) 1" begin
+        fx = im .* ones(100)
+        v = ones(100)
+        C = 1
+        @test compute_integral_oscillatory(fx, v, C) == -100.
+    end
+
+    @testset "im .* ones(100) ones(100) 10" begin
+        fx = im .* ones(100)
+        v = ones(100)
+        C = 10
+        @test compute_integral_oscillatory(fx, v, C) == -1000.
+    end
+
+    @testset "im .* [0:100] [100:-1:0] 1" begin
+        fx = im .* [0:100]
+        v = [100:-1:0]
+        C = 1
+        @test compute_integral_oscillatory(fx, v, C) == -166650.
+    end
+end
+
+@testset "convolve_step" begin
+    q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
+    conv = convolve_step(q, Δt = 0.36, r = 1)
+    @test conv[length(q)] ≈ 0.0007359029638686509 atol = ϵ
+end
