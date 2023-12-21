@@ -36,7 +36,7 @@ function compute_integral(Q; n=100, r, Δt, α = 10^-6, rb = 0.1, kg = 3., a =0.
     end
 
     # Computation parameters
-    Δt̃ = /rb^2 * Δt   # Non-dimensional time step
+    Δt̃ = α/rb^2 * Δt   # Non-dimensional time step
     r̃ = r/rb           # Non-dimensional distance
     ω = r̃              # Oscillation frequency of the integrand
 
