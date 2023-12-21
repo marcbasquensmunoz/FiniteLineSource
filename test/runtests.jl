@@ -4,6 +4,7 @@ using Test
 using SpecialFunctions
 
 include("Aqua.jl")
+include("test_values.jl")
 
 const ϵ = 5*10^-14
 
@@ -39,11 +40,9 @@ end
         @test dp.m == 5.0        
         @test dp.c == 5.0        
         @test dp.n == 100
-        @test length(dp.w) == 101 && length(dp.x) == 101 && length(dp.xt) == 101 
-        @test findmin(dp.xt)[1] > -1 && findmax(dp.xt)[1] < 1
-        @test sort(dp.xt) == dp.xt
-        @test findmin(dp.x)[1] > 0 && findmin(dp.x)[1] < 0.1 && findmax(dp.x)[1] < 10 &&findmax(dp.x)[1] > 9.9
-        @test sort(dp.x) == dp.x
+        @test dp.w == w_100
+        @test dp.xt == xt_100
+        @test dp.x == x_100_0_10
         @test size(dp.M) == (101, 101)
     end 
 
@@ -52,11 +51,9 @@ end
         @test dp.m == 2.5        
         @test dp.c == 4.5        
         @test dp.n == 200
-        @test length(dp.w) == 201 && length(dp.x) == 201 && length(dp.xt) == 201 
-        @test findmin(dp.xt)[1] > -1 && findmax(dp.xt)[1] < 1
-        @test sort(dp.xt) == dp.xt
-        @test findmin(dp.x)[1] > 2 && findmin(dp.x)[1] < 2.1 && findmax(dp.x)[1] < 7 &&findmax(dp.x)[1] > 6.9
-        @test sort(dp.x) == dp.x
+        @test dp.w == w_200
+        @test dp.xt == xt_200
+        @test dp.x == x_200_2_7
         @test size(dp.M) == (201, 201)
     end 
 end
@@ -67,7 +64,34 @@ end
         fp = frequency_parameters(dp, 10.)
         @test fp.ω == 10.
         @test fp.Ω == 50.
-        @test length(fp.v) == 101
+        @test fp.v ≈ v_0_10_100_10 atol = ϵ
+        @test fp.K ≈ 4.824830142460566 - 1.3118742685196438im  atol = ϵ
+    end
+
+    @testset "0_10_100_50" begin
+        dp = discretization_parameters(0, 10, 100)
+        fp = frequency_parameters(dp, 50.)
+        @test fp.ω == 50.
+        @test fp.Ω == 250.
+        @test fp.v ≈ v_0_10_100_50 atol = ϵ
+        @test fp.K ≈ 1.2049415264262933 - 4.852640097709027im  atol = ϵ
+    end
+
+    @testset "0_5_100_10" begin
+        dp = discretization_parameters(0, 5, 100)
+        fp = frequency_parameters(dp, 10.)
+        @test fp.ω == 10.
+        @test fp.Ω == 25.
+        @test fp.v ≈ v_0_5_100_10 atol = ϵ
+        @test fp.K ≈ 2.478007029658684 - 0.33087937524443256im  atol = ϵ
+    end
+
+    @testset "0_10_200_10" begin
+        dp = discretization_parameters(0, 10, 200)
+        fp = frequency_parameters(dp, 10.)
+        @test fp.ω == 10.
+        @test fp.Ω == 50.
+        @test fp.v ≈ v_0_10_200_10 atol = ϵ
         @test fp.K ≈ 4.824830142460566 - 1.3118742685196438im  atol = ϵ
     end
 end
@@ -80,8 +104,7 @@ end
         @test length(v) == 101
 
         @test findmin(fx)[1] == 0 && findmax(fx)[1] == 0 
-        @test findmin(x)[1] > 0 &&  findmin(x)[1] < 0.1 && findmax(x)[1] < 10 && findmax(x)[1] > 9.9 
-        @test sort(x) == x
+        @test x == x_100_0_10
     end
 
     @testset "10, [0., 1., 10.], [100, 100]" begin
@@ -91,9 +114,7 @@ end
         @test length(v) == 202
 
         @test findmin(fx)[1] == 0 && findmax(fx)[1] == 0 
-        @test @views findmin(x[1:101])[1] > 0 &&  findmin(x[1:101])[1] < 0.1 && findmax(x[1:101])[1] < 1 && findmax(x[1:101])[1] > 0.9
-        @test @views findmin(x[102:202])[1] > 1 &&  findmin(x[102:202])[1] < 1.1 && findmax(x[102:202])[1] < 10 && findmax(x[102:202])[1] > 9.9 
-        @test sort(x) == x
+        @test x == x_100_100_0_1_10
     end
 end
 
@@ -101,11 +122,19 @@ end
     @testset "1" begin
         x, fx, v = precompute_parameters(1)
         old_x = copy(x)
-        old_fx = copy(fx)
         Ct = @. exp(-x^2 * 0.36)
         f_evolve_1!(fx, x, Ct, 1)
         @test old_x == x
-        @test old_fx != fx
+        fx == fx_evolve1_1
+    end
+
+    @testset "10" begin
+        x, fx, v = precompute_parameters(1)
+        old_x = copy(x)
+        Ct = @. exp(-x^2 * 0.36)
+        f_evolve_1!(fx, x, Ct, 10)
+        @test old_x == x
+        fx == fx_evolve1_10
     end
 end
 
@@ -113,11 +142,19 @@ end
     @testset "1" begin
         x, fx, v = precompute_parameters(1)
         old_x = copy(x)
-        old_fx = copy(fx)
         Ct = @. exp(-x^2 * 0.36)
         f_evolve_2!(fx, x, 1)
         @test old_x == x
-        @test old_fx != fx
+        fx == fx_evolve2_1
+    end
+
+    @testset "10" begin
+        x, fx, v = precompute_parameters(1)
+        old_x = copy(x)
+        Ct = @. exp(-x^2 * 0.36)
+        f_evolve_2!(fx, x, 10)
+        @test old_x == x
+        fx == fx_evolve2_10
     end
 end
 
