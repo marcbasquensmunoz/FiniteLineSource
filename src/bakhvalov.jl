@@ -25,11 +25,10 @@ compute_integral_oscillatory(fx, v, C) = C * imag(dot(fx , v))
 
 function discretization_parameters(a, b, n)
     xt, w = gausslegendre(n+1)    
-    M = [w[s]*Pl.(xt[s], k) for k = 0:n, s = 1:n+1]
     m = (b-a)/2
     c = (b+a)/2
     x = @. m * xt + c 
-    return (x=x, m=m, c=c, M=M, n=n, xt=xt, w=w)
+    return (x=x, m=m, c=c, n=n, xt=xt, w=w)
 end
 
 function frequency_parameters(dp, ω)
@@ -64,22 +63,21 @@ end
 # Advance f one step and compute integral value 
 function compute_integral_and_advance_one_step!(fx, q, v, C, x, Ct, r, kg)
     f_evolve_1!(fx, x, Ct, q)
-    Iv = C * imag(dot(fx , v)) + compute_integral_slow(q, r, kg) 
+    Iv = compute_integral_oscillatory(fx, v, C) + compute_integral_slow(q, r, kg) 
     f_evolve_2!(fx, x, q)    
     return Iv
 end 
 
 # Advance f through the whole load history q and record each integral value in I
 function compute_integral_throught_history!(I, q, fx, v, C, x, r, kg, t)
-    N = length(I) 
     Ct = @. exp(-x^2*t)
-        for k=1:N 
+        for k in eachindex(I)
             @views @inbounds f_evolve_1!(fx, x, Ct, q[k])
             @views @inbounds I[k] = compute_integral_oscillatory(fx, v, C) + compute_integral_slow(q[k], r, kg)
             @views @inbounds f_evolve_2!(fx, x, q[k])    
         end
     
-       return nothing
+    return nothing
 end
 
 # Step response of the point source
