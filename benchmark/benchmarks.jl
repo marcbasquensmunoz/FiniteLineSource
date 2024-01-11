@@ -38,4 +38,4 @@ end
 
 SUITE["non-historical"]["compute_integral_throught_history"] = @benchmarkable compute_integral_throught_history()
 SUITE["non-historical"]["compute_convolution"] = @benchmarkable compute_convolution()
-SUITE["non-historical"]["compute_historical_convolution"] = @benchmarkable compute_historical_convolution()
+#SUITE["non-historical"]["compute_historical_convolution"] = @benchmarkable compute_historical_convolution()

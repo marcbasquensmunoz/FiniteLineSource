@@ -17,7 +17,7 @@ function f_evolve_1!(fx, x, Ct, q)
 end
 
 function f_evolve_2!(fx, x, q)
-    @. fx = fx  + q / x
+    @. fx = fx + q / x
 end
 
 compute_integral_slow(q, r, kg) = q / (4 * π * r * kg) 
@@ -71,11 +71,11 @@ end
 # Advance f through the whole load history q and record each integral value in I
 function compute_integral_throught_history!(I, q, fx, v, C, x, r, kg, t)
     Ct = @. exp(-x^2*t)
-        for k in eachindex(I)
-            @views @inbounds f_evolve_1!(fx, x, Ct, q[k])
-            @views @inbounds I[k] = compute_integral_oscillatory(fx, v, C) + compute_integral_slow(q[k], r, kg)
-            @views @inbounds f_evolve_2!(fx, x, q[k])    
-        end
+    for k in eachindex(I)
+        @views @inbounds f_evolve_1!(fx, x, Ct, q[k])
+        @views @inbounds I[k] = compute_integral_oscillatory(fx, v, C) + compute_integral_slow(q[k], r, kg)
+        @views @inbounds f_evolve_2!(fx, x, q[k])    
+    end
     
     return nothing
 end
