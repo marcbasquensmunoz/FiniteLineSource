@@ -2,9 +2,11 @@ using Parameters
 using FastGaussQuadrature
 using SpecialFunctions
 using LegendrePolynomials
-using Bessels
+using Bessels: besselj
 using LinearAlgebra
 using QuadGK
+
+const threshold = 8. 
 
 @with_kw struct SimulationParameters{T <: Real} @deftype T
     D
@@ -12,14 +14,27 @@ using QuadGK
     rb = 0.1
     α = 10^-6
     kg = 3.
+    Δt = 3600*24*30.
     segment_limits::Vector{T} = [0., 10.]
     segment_points::Vector{Int} = [100]
+    line_points::Int
 end
 
 @with_kw struct Evaluation{T <: Real} @deftype T
-    Δt
     z
     r
+end
+
+@with_kw struct Preallocations{T <: Real} @deftype T
+    P::Vector{Matrix{T}}
+    R::Vector{Matrix{T}}
+    M::Vector{Matrix{T}}
+end
+function Preallocations(segment_points, line_points) 
+    P = [zeros(i+1, i+1) for i in segment_points]
+    R = [zeros(i+1, line_points+1) for i in segment_points]
+    M = [zeros(i+1, line_points+1) for i in segment_points]
+    Preallocations(P=P, R=R, M=M)
 end
 
 @with_kw struct Precomputation{T <: Real} @deftype T
@@ -28,10 +43,20 @@ end
     v::Vector{T}
 end
 
-function segment_to_point(;ev::Evaluation, params::SimulationParameters) 
+function has_heatwave_arrived(ev::Evaluation, params::SimulationParameters; t) 
+    @unpack D, H, α = params
+    @unpack z, r = ev
+    if z >= D && z <= D + H
+        r^2 / (4α*t) < threshold^2
+    else 
+        r^2 + min((D-z)^2, (D+H-z)^2) / (4α*t) < threshold^2
+    end
+end
+
+function segment_to_point(;ev::Evaluation, params::SimulationParameters, t) 
     @unpack D, H, rb, kg, α = params
-    @unpack Δt, z, r = ev
-    quadgk(ζ -> q[1]/(4π*kg*sqrt(r^2+(z-ζ)^2)) * erfc(sqrt(r^2+(z-ζ)^2)/sqrt(4α*Δt)), D, H+D)
+    @unpack z, r = ev
+    quadgk(ζ -> q[1]/(4π*kg*sqrt(r^2+(z-ζ)^2)) * erfc(sqrt(r^2+(z-ζ)^2)/sqrt(4α*t)), D, H+D, atol=10^-16, order=20)
 end
 
 function compute_integral_slow(q; params::SimulationParameters, ev::Evaluation) 
@@ -57,49 +82,69 @@ function discretization_parameters(a, b, n)
     return (x=x, m=m, c=c, n=n, xt=xt, w=w)
 end
 
-function precompute_z_weights(Ns; params::SimulationParameters, r, z)
-    @unpack D, H, rb = params
-    zt, wz = gausslegendre(Ns+1)   
-    ζ = @. H/2 * (zt + 1) + D
-    R = @. sqrt(r^2 + (z - ζ)^2) / rb
-    return (R=R, wz=wz)
-end
-
-function precompute_coefficients(dp; params::SimulationParameters, ev::Evaluation, Ns=1000)
-    @unpack m, c, n, xt, w = dp
-    @unpack D, H, rb, kg = params
+function precompute_z_weights(;params::SimulationParameters, ev::Evaluation)
+    @unpack D, H, rb, α, line_points = params
     @unpack r, z = ev
-    C = H/2 * sqrt(m*π/2) / (2 * π^2 * rb * kg)
-    R, wz = precompute_z_weights(Ns, params=params, r=r, z=z)
 
-    P = reduce(hcat, [[w[s] * (2k+1) * Pl.(xt[s], k) for s in 1:n+1] for k in 0:n])
-    R = reduce(hcat, [[Bessels.besselj(k+1/2, m * rr) * imag((im)^k * exp(im*c*rr)) / rr^(3/2) for k in 0:n] for rr in R])
-
-    return C .* P * R * wz
+    z1 = D
+    z2 = D+H
+    zt, wz = gausslegendre(line_points+1)   
+    J = (z2-z1)/2
+    for (i, x) in enumerate(zt)
+        zt[i] = @. sqrt(r^2 + (z - (J * (x + 1) + z1))^2) / rb
+    end
+    return (R=zt, wz=wz, J=J)
 end
 
-function precompute_parameters(;ev::Evaluation, params::SimulationParameters)
+function precompute_coefficients(dp; params::SimulationParameters, ev::Evaluation, P, R, M)
+    @unpack m, c, n, xt, w = dp
+    @unpack D, H, rb, kg, α = params
+    @unpack r, z = ev
+
+    R̃, wz, J = precompute_z_weights(params=params, ev=ev)
+    C = J * sqrt(m*π/2) / (2 * π^2 * rb * kg)
+
+    for k in 0:n
+        for s in 1:n+1
+            P[s, k+1] = (2k+1) * w[s] * Pl(xt[s], k)
+        end
+    end
+
+    for (i, r̃) in enumerate(R̃)
+        for k in 0:n
+            R[k+1, i] = besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
+        end
+    end
+
+    mul!(M, P, R)
+
+    return C .* M * wz
+end
+
+function precompute_parameters(;ev::Evaluation, params::SimulationParameters, prealloc::Preallocations)
     @unpack segment_limits, segment_points = params
     dps = [discretization_parameters(a,b,n) for (a,b,n) in zip(segment_limits[1:end-1],segment_limits[2:end],segment_points)] 
-    fps = [precompute_coefficients(dp, params=params, ev=ev) for dp in dps]
-    fxs = [zeros(dp.n+1) for dp in dps]
     
     x  = reduce(vcat, (dp.x for dp in dps))
-    fx = reduce(vcat, fxs)
-    v  = reduce(vcat, (fp for fp in fps))
+    v  = reduce(vcat, [precompute_coefficients(dp, params=params, ev=ev, P=prealloc.P[i], R=prealloc.R[i], M=prealloc.M[i]) for (i, dp) in enumerate(dps)])
+    fx = zeros(sum([dp.n+1 for dp in dps]))
 
     return Precomputation(x=x, fx=fx, v=v)
 end
 
 function compute_integral_throught_history!(I, q; precomp::Precomputation, ev::Evaluation, params::SimulationParameters)
-    @unpack D, H, rb, kg, α = params
-    @unpack Δt = ev
+    @unpack D, H, rb, kg, α, Δt = params
     @unpack x, fx, v = precomp
+ 
     Δt̃ = α*Δt/rb^2
     Ct = @. exp(-x^2*Δt̃)
     for k in eachindex(I)
         @views @inbounds f_evolve_1!(fx, x, Ct, q[k])
-        @views @inbounds I[k] = compute_integral_oscillatory(fx, v) + compute_integral_slow(q[k], params=params, ev=ev)
+        if has_heatwave_arrived(ev, params, t=Δt*k)
+            @views @inbounds I[k] = compute_integral_oscillatory(fx, v) + compute_integral_slow(q[k], params=params, ev=ev)
+        else 
+            I[k] = 0.
+        end
         @views @inbounds f_evolve_2!(fx, x, q[k])    
     end
     
@@ -109,15 +154,18 @@ end
 
 ## Example
 segment_limits = [0., 0.01, 0.1, 0.5, 1., 3., 5., 7., 10.] 
-segment_points = [10, 25, 15, 15, 20, 15, 15, 15]
-params = SimulationParameters(D=0., H=20., segment_limits=segment_limits, segment_points=segment_points)
-ev = Evaluation(Δt = 3600*24*365*5., z = 10., r = 0.5)
+segment_points = 2 .* [10, 25, 15, 15, 20, 15, 15, 15]
+params = SimulationParameters(D=0., H=50., segment_limits=segment_limits, segment_points=segment_points, line_points=50)
 
-q = [1.]
-I = zeros(length(q))
+q = ones(1)
+nt = length(q)
+I = zeros(nt)
+ev = Evaluation(z=25., r=1.)
 
-precomp = precompute_parameters(ev=ev, params=params)
-compute_integral_throught_history!(I, q, precomp=precomp, params=params, ev=ev)
-I                                      # Compare this result 
+prealloc = Preallocations(segment_points, params.line_points) 
 
-segment_to_point(ev=ev, params=params) # Compare to this
+@time precomp = precompute_parameters(ev=ev, params=params, prealloc=prealloc)
+@time compute_integral_throught_history!(I, q, precomp=precomp, params=params, ev=ev)
+I                                            
+res = segment_to_point(ev=ev, params=params, t=params.Δt) 
+err = res[1] - I[1]
