@@ -14,24 +14,7 @@ end
 @with_kw struct Preallocation{T <: Number}
     P::Vector{Matrix{T}}
     R::Vector{Matrix{T}}
-    M::Vector{Matrix{T}}
-end
-function Preallocation(::SegmentToPoint, params::Constants) 
-    @unpack segment_points, line_points = params
-    P = [zeros(i+1, i+1) for i in segment_points]
-    R = [zeros(i+1, line_points+1) for i in segment_points]
-    M = [zeros(i+1, line_points+1) for i in segment_points]
-    Preallocation(P=P, R=R, M=M)
-end
-function Preallocation(::SegmentToSegment, params::Constants) 
-    @unpack segment_points, line_points = params
-    P = [zeros(i+1, i+1) for i in segment_points]
-    R = [zeros(i+1, (line_points+1)^2) for i in segment_points]
-    M = [zeros(i+1, (line_points+1)^2) for i in segment_points]
-    Preallocation(P=P, R=R, M=M)
-end
-function Preallocation(::PointToPoint, params::Constants) 
-    Preallocation(P=[zeros(0, 0)], R=[zeros(0, 0)], M=[zeros(0, 0)])
+    M::Vector{Vector{T}}
 end
 
 @with_kw struct Precomputation{T <: Number}
@@ -64,6 +47,18 @@ function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomp
     return nothing
 end
 
+function precompute_parameters(setup::Setup; prealloc::Preallocation, params::Constants)
+    @unpack segment_limits, segment_points = params
+    dps = @views [discretization_parameters(a,b,n) for (a,b,n) in zip(segment_limits[1:end-1], segment_limits[2:end], segment_points)] 
+    
+    x  = reduce(vcat, (dp.x for dp in dps)) 
+    v  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params, P=prealloc.P[i], R=prealloc.R[i], M=prealloc.M[i]) for (i, dp) in enumerate(dps)])
+    fx = zeros(sum([dp.n+1 for dp in dps]))
+    I_c = constant_integral(setup, params=params)
+
+    return Precomputation(x=x, fx=fx, v=v, I_c=I_c)
+end
+
 function discretization_parameters(a, b, n)
     xt, w = gausslegendre(n+1)    
     m = (b-a)/2
@@ -71,19 +66,3 @@ function discretization_parameters(a, b, n)
     x = @. m * xt + c 
     return (x=x, m=m, c=c, n=n, xt=xt, w=w)
 end
-
-
-
-q = ones(1)
-nt = length(q)
-I = zeros(nt)
-setup = PointToPoint(r=5.)
-params = Constants(Δt = 3600*24*30.)
-prealloc = Preallocation(setup, params) 
-
-@time precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
-@time compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
-I                                            
-
-res = point_to_point_test(setup, params=params, t=params.Δt) 
-err = res[1] - I[1]
