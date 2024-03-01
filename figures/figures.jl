@@ -31,3 +31,24 @@ for n in N
         println("Max error for r=$r, n=$n: $(compute_max_error(r, n))")
     end
 end
+
+
+function show_interpolation(f, n)
+    x, w = gausslegendre(n+1)
+    y = -1:0.01:1
+    ck = [(2k+1)/2 * sum(w .* Pl.(x, k) .* f.(x)) for k in 0:n]
+    int(x) = sum([ck[k+1] * Pl(x, k) for k in 0:n])
+    plot(x, int.(x))
+    plot!(y, f.(y))
+    display(current())
+    sum(@. (int(y) - f(y))^2)
+end
+
+
+show_interpolation(x -> exp(20*x), 40)
+show_interpolation(x -> exp(10*x), 30)
+show_interpolation(x -> exp(5*x), 25)
+show_interpolation(x -> exp(3*x), 20)
+show_interpolation(x -> exp(x), 15)
+
+show_interpolation(x -> 2*exp(x) - sin(x+0.5), 20)

@@ -11,12 +11,15 @@ using LinearAlgebra
 using Cubature
 using FastGaussQuadrature
 using LegendrePolynomials
+using DSP
 
 include("BoreholeSegment.jl")
 include("segment_response.jl")
 include("segment_T_field.jl")
 
-include("iterative.jl")
+include("convolution.jl")
+
+include("bakhalov.jl")
 include("point_to_point.jl")
 include("segment_to_point.jl")
 include("segment_to_segment.jl")

@@ -7,7 +7,7 @@ abstract type Setup end
     Δt = 3600.
 
     segment_limits::Vector{T} = [0., 0.01, 0.1, 0.5, 1., 3., 5., 7., 10.] 
-    segment_points::Vector{Int} = 2 .* [10, 25, 15, 15, 20, 15, 15, 15]
+    segment_points::Vector{Int} = [10, 25, 15, 15, 20, 15, 15, 15]
     line_points::Int = 30
 end
 

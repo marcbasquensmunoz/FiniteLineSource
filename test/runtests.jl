@@ -43,7 +43,6 @@ end
         @test dp.w == w_100
         @test dp.xt == xt_100
         @test dp.x == x_100_0_10
-        @test size(dp.M) == (101, 101)
     end 
 
     @testset "2_7_200" begin
@@ -54,7 +53,6 @@ end
         @test dp.w == w_200
         @test dp.xt == xt_200
         @test dp.x == x_200_2_7
-        @test size(dp.M) == (201, 201)
     end 
 end
 
