@@ -27,4 +27,8 @@ export PointToPoint, SegmentToPoint, SegmentToSegment
 export Constants, Preallocation
 export precompute_parameters, compute_integral_throught_history!
 
+include("level_set_length.jl")
+export level_set_length
+export LevelSetParams
+
 end
