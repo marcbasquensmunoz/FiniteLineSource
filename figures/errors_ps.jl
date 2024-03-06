@@ -1,8 +1,10 @@
 using FiniteLineSource
 using FiniteLineSource: convolve_step
-using Plots
+using WGLMakie
+using CairoMakie
+using Polynomials
 
-function produce_plot(r, segment_points, label)        
+function produce_plot(r, segment_points, label, color)        
     q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
     I = zeros(length(q))
 
@@ -22,30 +24,28 @@ function produce_plot(r, segment_points, label)
     C = convolve_step(q, Δt = params.Δt, r = setup.r)
 
     abs_error = abs.(C-I) 
-    rel_error = abs.((C-I) ./ C) 
+    t = 1:length(q)
+    abs_error[abs_error .== 0] .= 10^-32
+    error = log10.(abs_error)
+    fit_f = fit(error, t, 21)
 
-    maximum(abs_error)
-    plot!(1:length(q), log10.(abs_error), label=label, ylimits=(-20, 0))
-    #plot(1:length(q), log10.(abs_error))
-
-    #maximum(rel_error)
-    #plot(1:length(q), log10.(rel_error))
+    lines!(t, fit_f.(t), color=color)#, label=label, ylimits=(-20, 0))
 end
+
 
 rs = [0.1, 1, 10, 100]
 plots = []
-for r in rs
-    f = plot(title="r̃=$(Int(r/0.1))", legend=r==100 ? true : false)
-    produce_plot(r, [50], "n=50")    
-    produce_plot(r, [100], "n=100")       
-    produce_plot(r, [200], "n=200")       
-    produce_plot(r, [400], "n=400")     
-    produce_plot(r, [600], "n=600")         
-    xlabel!("t (h)")  
-    ylabel!("log₁₀(ϵ)")
-    push!(plots, f)
+ff = Figure(size = (600,600))
+
+for (i, r) in enumerate(rs)
+    ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel = "t (h)", ylabel = "log₁₀(ϵ)", title="r̃=$(Int(r/0.1))")
+    produce_plot(r, [50], "n=50", :blue)    
+    #produce_plot(r, [100], "n=100", :red)       
+    #produce_plot(r, [200], "n=200", :green)       
+    #produce_plot(r, [400], "n=400", :orange)     
+    #produce_plot(r, [600], "n=600", :black)         
 end
-plot(plots..., layout=(2,2))
+ff
 
 
 rs = [0.1, 1, 10, 100]
