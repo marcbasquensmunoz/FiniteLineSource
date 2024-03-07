@@ -43,19 +43,23 @@ Fx = zeros(length(q),length(x))
 ff = Figure(size = (600, 300))
 ax = Axis(ff[1, 1], xlabel = latexstring(L"\zeta"), ylabel = latexstring(L"\bar{F}"), title=latexstring(L"\tilde{t} = 1"))
 
-lines!(ax, x, Fx[10000,:], color= :blue, label = "1")
-colors = [(i%2 == 0 ? :grey : :red, 0.1) for (i, lim) in enumerate(segment_limits[1:end-1])]
+lines!(ax, x, Fx[10000,:], color= :black, label = "1", linewidth=0.5)
+scatter!(ax,  x[1:2:end], Fx[10000,:][1:2:end], color=:blue, markersize=4)
+colors = [(i%2 == 0 ? :grey : :red, 0.07) for (i, lim) in enumerate(segment_limits[1:end-1])]
 vspan!(segment_limits[1:end-1], segment_limits[2:end], color = colors)
 xlims!(ax, 0, 10)
-vlines!(segment_limits, colors= :blue, linewidth=0.5)
+ax.xticks = 0:2:10
+vlines!(segment_limits, colors= :blue, linewidth=1)
 
 #vlines!(ax, segment_limits, color = :red)
 
-ax2 = Axis(ff, bbox = BBox(320, 570, 130, 230), backgroundcolor=:white, xticklabelsize = 12, yticklabelsize = 12, title = "zoomed view")
+ax2 = Axis(ff, bbox = BBox(320, 570, 130, 230), xticklabelsize = 12, yticklabelsize = 12, title = "zoomed view")
 xlims!(ax2, 0, 0.5)
-lines!(ax2, x, Fx[10000,:], color= :blue, strokewidth = 0.5, label = "1")
+ax2.xticks = 0:0.1:0.5
+lines!(ax2, x, Fx[10000,:], color= :black, strokewidth = 0.5, label = "1", linewidth=0.5)
+scatter!(ax2,  x[1:2:end], Fx[10000,:][1:2:end], color=:blue, markersize=4)
 vspan!(segment_limits[1:end-1], segment_limits[2:end], color = colors)
-vlines!(segment_limits, colors= :blue, linewidth=0.5)
+vlines!(segment_limits, colors= :blue, linewidth=1)
 
 #Box(ff, color = :bisque, strokecolor = :blue, strokewidth = 1)
 
