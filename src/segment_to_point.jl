@@ -9,21 +9,28 @@ end
 function Preallocation(::SegmentToPoint, params::Constants) 
     @unpack segment_points, line_points = params
     P = [zeros(i+1, i+1) for i in segment_points]
-    R = [zeros(i+1, line_points+1) for i in segment_points]
+    R = [zeros(i+1, sum(line_points) + length(line_points)) for i in segment_points]
     M = [zeros(i+1) for i in segment_points]
     Preallocation(P=P, R=R, M=M)
 end
 
 function precompute_z_weights(setup::SegmentToPoint; params::Constants)
-    @unpack rb, α, line_points = params
+    @unpack rb, α, line_points, line_limits = params
     @unpack D, H, r, z = setup
 
-    zt, wz = gausslegendre(line_points+1)   
-    J = H/2
-    for (i, x) in enumerate(zt)
-        zt[i] = sqrt(r^2 + (z - (J * (x + 1) + D))^2) / rb
+    R = zeros(0)
+    wz = zeros(0)
+    J = zeros(0)
+
+    limits = line_limits .* H .+ D
+
+    for (a, b, n) in zip(limits[1:end-1], limits[2:end], line_points) 
+        @unpack x, m, w = discretization_parameters(a, b, n)
+        append!(J, m .* ones(length(w)))
+        append!(R, @. sqrt(r^2 + (z - x)^2) / rb)
+        append!(wz, w)
     end
-    return (R=zt, wz=wz, J=J)
+    return (R=R, wz=wz, J=J)
 end
 
 function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, P, R, M)
@@ -32,7 +39,7 @@ function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, P
     @unpack rb, kg = params
 
     R̃, wz, J = precompute_z_weights(setup, params=params)
-    C = J * sqrt(m*π/2) / (2 * π^2 * rb * kg)
+    C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
     for k in 0:n
         for s in 1:n+1
@@ -46,7 +53,8 @@ function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, P
         end
     end
 
-    M .= R * wz
+
+    M .= R * diagm(J) * wz
     M .= P * M 
 
     return C .* M

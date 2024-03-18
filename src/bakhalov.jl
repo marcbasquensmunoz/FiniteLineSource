@@ -8,7 +8,8 @@ abstract type Setup end
 
     segment_limits::Vector{T} = [0., 0.01, 0.1, 0.5, 1., 3., 5., 7., 10.] 
     segment_points::Vector{Int} = [10, 25, 15, 15, 20, 15, 15, 15]
-    line_points::Int = 30
+    line_points::Vector{Int} = [30]
+    line_limits::Vector{T} = [0., 1.]
 end
 
 @with_kw struct Preallocation{T <: Number}
@@ -31,7 +32,7 @@ f_evolve_2!(fx, x, q)     = @. fx = fx + q / x
 function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomputation, params::Constants)
     @unpack rb, α, Δt = params
     @unpack x, fx, v, I_c = precomp
- 
+
     Δt̃ = α*Δt/rb^2
     Ct = @. exp(-x^2*Δt̃)
     for k in eachindex(I)

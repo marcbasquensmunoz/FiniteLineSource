@@ -12,7 +12,7 @@ function produce_plot_fls(r, line_points, label)
     segment_limits = [0., 0.01, 0.1, 0.5, 1., 3., 10.]
     segment_points = 4 .* [10, 25, 10, 10, 10, 10]
 
-    params = Constants(Δt = 3600., segment_limits=segment_limits, segment_points=segment_points, line_points=line_points)
+    params = Constants(Δt = 3600., segment_limits=segment_limits, segment_points=segment_points, line_points=line_points, line_limits=[0., 0.3, 0.5, 0.7, 1.])
     prealloc = Preallocation(setup, params) 
 
     precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
@@ -34,11 +34,11 @@ ff = Figure(size = (800,600))
 
 for (i, r) in enumerate(rs)
     ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel = "t (years)", ylabel = "log₁₀(ϵ)", title="r̃=$(Int(r/0.1))", limits=(nothing, (-20, 0)))
-    produce_plot_fls(r, 200, "N=200")    
-    produce_plot_fls(r, 400, "N=400")       
-    produce_plot_fls(r, 600, "N=600")       
-    produce_plot_fls(r, 800, "N=800")     
-    produce_plot_fls(r, 1000, "N=1000")       
+    produce_plot_fls(r, 0.5 .* [20, 30, 30, 20], "∑N=50")    
+    produce_plot_fls(r, [20, 30, 30, 20], "∑N=100")       
+    produce_plot_fls(r, 2 .* [20, 30, 30, 20], "∑N=200")       
+    produce_plot_fls(r, 3 .* [20, 30, 30, 20], "∑N=300")     
+    produce_plot_fls(r, 4 .* [20, 30, 30, 20], "∑N=400")       
 end
 ff[2, 3] = Legend(ff, ax, "")
 ff
