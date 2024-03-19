@@ -27,8 +27,9 @@ export PointToPoint, SegmentToPoint, SegmentToSegment
 export Constants, Preallocation
 export precompute_parameters, compute_integral_throught_history!
 
-include("level_set_length.jl")
-export level_set_length
-export LevelSetParams
+include("mean_sts.jl")
+include("midpoint.jl")
+export mean_sts_evaluation, midpoint_evaluation
+export LevelSetParams, MidPointParams
 
 end

@@ -21,8 +21,10 @@ end
 
 transpose(p::LevelSetParams) = LevelSetParams(D1=p.D2, H1=p.H2, D2=p.D1, H2=p.H1, σ=p.σ, rb=p.rb)
 
+grad(r, rb, σ) = sqrt(2)/(rb^2*r)*sqrt((rb*r)^2-σ^2)
+
 function L(r, params::LevelSetParams)
-   @unpack D1, H1, D2, H2, σ, rb, r1, r2, r3, r4 = params
+    @unpack D1, H1, D2, H2, σ, rb, r1, r2, r3, r4 = params
 
     if r < r1
         0
@@ -37,11 +39,10 @@ function L(r, params::LevelSetParams)
     end
 end
 
-
-function level_set_length(params::LevelSetParams)
+function mean_sts_evaluation(params::LevelSetParams)
     paramsT = transpose(params)
     f(r) = L(r, params) + L(r, paramsT)
+    h_mean_sts(r) = f(r) / grad(r, params.rb, params.σ) / params.H1
     r = max(params.r1, paramsT.r1):0.01:max(params.r4, paramsT.r4)
-    return f, r    
+    return h_mean_sts, r    
 end
-

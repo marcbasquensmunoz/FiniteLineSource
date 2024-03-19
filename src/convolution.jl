@@ -28,4 +28,4 @@ function convolve_sls_step(q; Δt, r, D1, H1, D2, H2, α = 10^-6, kg = 3.)
     return conv(q, response)[1:length(q)]
 end
 
-segment_mean_step_response(t, r, D1, H1, D2, H2, α, kg) = hcubature(ζ -> point_step_response(t, sqrt(r^2 + (ζ[1]-ζ[2])^2), α, kg), [D1, D2], [D1+H1, D2+H2])[1]
+segment_mean_step_response(t, r, D1, H1, D2, H2, α, kg) = hcubature(ζ -> point_step_response(t, sqrt(r^2 + (ζ[1]-ζ[2])^2), α, kg), [D1, D2], [D1+H1, D2+H2])[1] / H1
