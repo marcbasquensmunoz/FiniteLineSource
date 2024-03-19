@@ -13,12 +13,13 @@ SUITE["non-historical"] = BenchmarkGroup()
 
 function compute_integral_throught_history(q, Δt, r)
     segment_limits = [0., 0.01, 0.1, 0.5, 1., 3., 10.]
-    segment_points = [10, 25, 10, 10, 10, 10]
+    segment_points = 2 .* [10, 25, 10, 10, 10, 10]
 
     params = Constants(Δt=Δt, segment_limits=segment_limits, segment_points=segment_points)
     setup = PointToPoint(r=r)
     prealloc = Preallocation(setup, params) 
 
+    I = zeros(length(q))
     precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
     compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 end
