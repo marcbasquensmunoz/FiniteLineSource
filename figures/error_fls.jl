@@ -33,14 +33,14 @@ plots = []
 ff = Figure(size = (800,600))
 
 for (i, r) in enumerate(rs)
-    ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel = "t (years)", ylabel = "log₁₀(ϵ)", title="r̃=$(Int(r/0.1))", limits=(nothing, (-20, 0)))
+    ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel =  floor(Int, (i-1)/2) == 1 ? "t (years)" : "", ylabel = i%2 == 1 ? "log₁₀(ϵ)" : "", title="r̃=$(Int(r/0.1))", limits=(nothing, (-20, 0)))
     produce_plot_fls(r, 0.5 .* [20, 30, 30, 20], "∑N=50")    
     produce_plot_fls(r, [20, 30, 30, 20], "∑N=100")       
     produce_plot_fls(r, 2 .* [20, 30, 30, 20], "∑N=200")       
     produce_plot_fls(r, 3 .* [20, 30, 30, 20], "∑N=300")     
     produce_plot_fls(r, 4 .* [20, 30, 30, 20], "∑N=400")       
+    ff[2, 3] = Legend(ff, ax, "")
 end
-ff[2, 3] = Legend(ff, ax, "")
 ff
 
 CairoMakie.activate!()

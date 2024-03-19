@@ -42,7 +42,7 @@ end
 function mean_sts_evaluation(params::LevelSetParams)
     paramsT = transpose(params)
     f(r) = L(r, params) + L(r, paramsT)
-    h_mean_sts(r) = f(r) / grad(r, params.rb, params.σ) / params.H1
+    h_mean_sts(r) = f(r) / grad(r, params.rb, params.σ) / params.H2
     r = max(params.r1, paramsT.r1):0.01:max(params.r4, paramsT.r4)
     return h_mean_sts, r    
 end

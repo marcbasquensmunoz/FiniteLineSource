@@ -30,19 +30,20 @@ end
 
 rs = [0.1, 1, 10, 100]
 plots = []
-ff = Figure(size = (800,600))
+ff = Figure(size = (800,500))
 
 segment_limits = [0., 10.]
 
 for (i, r) in enumerate(rs)
-    ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel = "t (years)", ylabel = "log₁₀(ϵ)", title="r̃=$(Int(r/0.1))", limits=(nothing, (-20, 0)))
+    ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel = floor(Int, (i-1)/2) == 1 ? "t (years)" : "", ylabel = i%2 == 1 ? "log₁₀(ϵ)" : "", title="r̃=$(Int(r/0.1))", limits=(nothing, (-20, 0)))
+
     produce_plot(r, [50], segment_limits, "n=50")    
     produce_plot(r, [100], segment_limits, "n=100")       
     produce_plot(r, [200], segment_limits, "n=200")       
     produce_plot(r, [400], segment_limits, "n=400")     
-    produce_plot(r, [600], segment_limits, "n=600")         
+    produce_plot(r, [600], segment_limits, "n=600")      
+    ff[2, 3] = Legend(ff, ax, "")   
 end
-ff[2, 3] = Legend(ff, ax, "")
 ff
 
 CairoMakie.activate!()
@@ -56,19 +57,19 @@ save("figures/error_m1.pdf", ff)
 
 rs = [0.1, 1, 10, 100]
 plots = []
-ff = Figure(size = (800,600))
+ff = Figure(size = (800,500))
 
 segment_limits = [0., 0.01, 0.1, 0.5, 1., 3., 10.]
 
 for (i, r) in enumerate(rs)
-    ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel = "t (years)", ylabel = "log₁₀(ϵ)", title="r̃=$(Int(r/0.1))", limits=(nothing, (-20, 0)))
+    ax = Axis(ff[floor(Int, (i-1)/2) + 1, (i-1)%2+1], xlabel = floor(Int, (i-1)/2) == 1 ? "t (years)" : "", ylabel = i%2 == 1 ? "log₁₀(ϵ)" : "", title="r̃=$(Int(r/0.1))", limits=(nothing, (-20, 0)))
     produce_plot(r, [10, 15, 5, 5, 5, 5], segment_limits, "∑n=45")    
     produce_plot(r, [10, 25, 10, 10, 10, 10], segment_limits, "∑n = 75")       
     produce_plot(r, 2 .* [10, 25, 10, 10, 10, 10], segment_limits, "∑n = 150")       
     produce_plot(r, 3 .* [10, 25, 10, 10, 10, 10], segment_limits, "∑n = 225")     
-    produce_plot(r, 4 .* [10, 25, 10, 10, 10, 10], segment_limits, "∑n = 300")       
+    produce_plot(r, 4 .* [10, 25, 10, 10, 10, 10], segment_limits, "∑n = 300")   
+    ff[2, 3] = Legend(ff, ax, "")    
 end
-ff[2, 3] = Legend(ff, ax, "")
 ff
 
 CairoMakie.activate!()
