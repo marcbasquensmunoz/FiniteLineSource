@@ -37,7 +37,7 @@ Plots.plot!(x, @. (1-exp(-x^2 * Δt̃)) * f(x, r̃, ṽ, rb, α, kg))
 Plots.plot!(x, @. exp(-ζ^2 * Δt̃) *(1-exp(-x^2 * Δt̃)) * f(x, r̃, ṽ, rb, α, kg))
 
 
-FiniteLineSource.convolve_step_moving([1, 0, 0]; Δt, r, v, α, kg)
+FiniteLineSource.convolve_step([1, 0, 0]; Δt, r, v, α, kg)
 FiniteLineSource.moving_point_step_response(Δt, r, v, α, kg)
 
 
@@ -47,9 +47,13 @@ quadgk(ζ -> (1-exp(-ζ^2 * Δt̃)) * u_ps(ζ, r̃, rb, α, kg) , 0, Inf)
 FiniteLineSource.convolve_step([1, 0]; Δt, r, α, kg)
 
 
+
+setup = MovingPointToPoint(x=0., σ=1., v=0.0005)
+params = Constants(Δt=Δt, segment_limits=segment_limits, segment_points=segment_points)
+
 x = 0:0.1:10
 @gif for i in 0:00
-    Plots.plot(x, @. FiniteLineSource.moving_point_step_response(Δt*i, x, 0.001, α, kg))
+    Plots.plot(x, FiniteLineSource.step_response.(Δt*i, Ref(setup), Ref(params)))
 end
 
 
@@ -69,7 +73,7 @@ I = zeros(length(q))
 segment_limits = [0., 0.01, 0.1, 0.5, 1., 3., 10.]
 segment_points = 4 .* [10, 25, 10, 10, 10, 10]
 
-setup = MovingPointToPoint(x=0.01, σ=0.0, v=0.05)
+setup = MovingPointToPoint(x=0.1, σ=0., v=0.005)
 params = Constants(Δt=Δt, segment_limits=segment_limits, segment_points=segment_points)
 prealloc = Preallocation(setup, params)  
 precomp = precompute_parameters(setup, prealloc=prealloc, params=params)

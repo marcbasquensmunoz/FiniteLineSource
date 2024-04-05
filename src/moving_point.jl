@@ -25,21 +25,21 @@ end
 
 function precompute_coefficients(setup::MovingPointToPoint; dp, params::Constants, P, R, M)
     @unpack m, c, n, xt, w = dp
-    @unpack r, σ, v = setup
+    @unpack r, x, v = setup
     @unpack rb, kg, α = params
     r̃ = r/rb
 
     Ω = dp.m * r̃
-    C = dp.m * exp(im * r̃ * dp.c) * exp(r*v/(2α)) / (2 * π^2 * r * kg)
+    C = dp.m * exp(im * r̃ * dp.c) * exp(x*v/(2α)) / (2 * π^2 * r * kg)
     w = [ sum([imag(C * (im)^k) *(2k+1) * sqrt(π/(2Ω)) * besselj(k+1/2, Ω)*Pl.(dp.xt[s],k) for k =0:dp.n]) * dp.w[s] for s=1:dp.n+1]
 
     return w
 end
 
 function constant_integral(setup::MovingPointToPoint; params::Constants)
-    @unpack r, σ, v = setup
-    @unpack kg = params
-    1 / (4 * π * r * kg)
+    @unpack x, r, σ, v = setup
+    @unpack kg, α = params
+    exp(v*(x-r) / (2α)) / (4 * π * r * kg)
 end
 
 function has_heatwave_arrived(setup::MovingPointToPoint; params::Constants, t)

@@ -42,7 +42,7 @@ end
 
 # Moving point source
 function step_response(t, model::MovingPointToPoint, params::Constants)
-    @unpack r, v = model
+    @unpack r, x, v = model
     @unpack α, kg = params
-    (erfc( (r-t*v) / sqrt(4t*α)) + exp(v*r/α) * erfc((r+t*v) / sqrt(4t*α)) ) / (8π*r*kg)
+    exp(v * (x-r)/ (2α)) * (erfc( (r-t*v) / sqrt(4t*α)) + exp(v*r/α) * erfc((r+t*v) / sqrt(4t*α)) ) / (8π*r*kg)
 end
