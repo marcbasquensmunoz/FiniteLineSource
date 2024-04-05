@@ -17,13 +17,15 @@ include("BoreholeSegment.jl")
 include("segment_response.jl")
 include("segment_T_field.jl")
 
-include("convolution.jl")
 
 include("bakhalov.jl")
 include("point_to_point.jl")
 include("segment_to_point.jl")
 include("segment_to_segment.jl")
-export PointToPoint, SegmentToPoint, SegmentToSegment
+include("moving_point.jl")
+include("convolution.jl")
+export PointToPoint, SegmentToPoint, SegmentToSegment, MovingPointToPoint
+export convolve_step
 export Constants, Preallocation
 export precompute_parameters, compute_integral_throught_history!
 

@@ -26,8 +26,8 @@ end
 end
 
 exponential_integral(fx, v) = dot(fx, v)
-f_evolve_1!(fx, x, Ct, q) = @. fx = Ct * (fx - q/x)
-f_evolve_2!(fx, x, q)     = @. fx = fx + q / x
+f_evolve_1!(::Setup, fx, x, Ct, q, params::Constants) = @. fx = Ct * (fx - q/x)
+f_evolve_2!(::Setup, fx, x, q, params::Constants)     = @. fx = fx + q / x
 
 function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomputation, params::Constants)
     @unpack rb, α, Δt = params
@@ -36,13 +36,13 @@ function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomp
     Δt̃ = α*Δt/rb^2
     Ct = @. exp(-x^2*Δt̃)
     for k in eachindex(I)
-        @inbounds f_evolve_1!(fx, x, Ct, q[k])
+        @inbounds f_evolve_1!(setup, fx, x, Ct, q[k], params)
         if has_heatwave_arrived(setup, params=params, t=Δt*k)
             @inbounds I[k] = exponential_integral(fx, v) + q[k] * I_c
         else 
             @inbounds I[k] = 0.
         end
-        @inbounds f_evolve_2!(fx, x, q[k])    
+        @inbounds f_evolve_2!(setup, fx, x, q[k], params)    
     end
     
     return nothing

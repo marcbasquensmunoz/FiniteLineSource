@@ -1,5 +1,4 @@
 using FiniteLineSource
-using FiniteLineSource: convolve_fls_step, convolve_sls_step
 using Plots
 
 
@@ -18,8 +17,7 @@ function produce_plot_fls(line_points, setup, label)
     precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
     compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 
-    C = convolve_fls_step(q, Δt=params.Δt, r=setup.r, z=setup.z, D=setup.D, H=setup.H)
-    #C = convolve_sls_step(q, Δt=params.Δt, r=setup.r, D1=setup.D1, H1=setup.H1, D2=setup.D2, H2=setup.H2)
+    C = convolve_step(q, setup, params=params)
 
     abs_error = abs.(C-I) 
     rel_error = abs.((C-I) ./ C) 

@@ -18,7 +18,7 @@ function produce_plot_fls(r, line_points, label)
     precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
     compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 
-    C = convolve_fls_step(q, Δt=3600., r=setup.r, z=setup.z, D=setup.D, H=setup.H, α=params.α, kg=params.kg)
+    C = convolve_step(q, setup, params=paramss)
 
     abs_error = abs.(C-I) 
     t = 1:length(q)
