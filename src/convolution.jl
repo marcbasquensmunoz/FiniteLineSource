@@ -23,12 +23,12 @@ end
 function step_response(t, model::PointToPoint, params::Constants)
     @unpack r = model
     @unpack α, kg = params
-    erfc(r/(2*sqrt(t*α))) / (4*π*r*kg)
+    point_step_response(t, r, α, kg)
 end
 
 # Segment to point
 function step_response(t, model::SegmentToPoint, params::Constants)
-    @unpack r, D, H = model
+    @unpack r, D, H, z = model
     @unpack α, kg = params
     quadgk(ζ -> point_step_response(t, sqrt(r^2 + (z-ζ)^2), α, kg), D, D+H)[1]
 end
