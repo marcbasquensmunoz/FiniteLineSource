@@ -25,13 +25,19 @@ include("segment_to_segment.jl")
 include("moving_point.jl")
 include("convolution.jl")
 export PointToPoint, SegmentToPoint, SegmentToSegment, MovingPointToPoint
-export convolve_step
+export convolve_step, step_response
 export Constants, Preallocation
 export precompute_parameters, compute_integral_throught_history!
 
 include("mean_sts.jl")
 include("midpoint.jl")
 export mean_sts_evaluation, midpoint_evaluation
-export LevelSetParams, MidPointParams
+export MeanSegToSegEvParams, MidPointParams
+
+include("integration.jl")
+export integrate
+
+include("self_response.jl")
+export compute_self_response
 
 end
