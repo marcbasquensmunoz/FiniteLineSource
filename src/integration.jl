@@ -15,7 +15,8 @@ function integrate_x_w(f, a, b, n)
     dot(f.(x), w), x, w
 end
 
-function adaptive_integration(f, a, b, tol, n = 3)
+
+function adaptive_integration(f, a, b, tol = 10^-10, n = 3)
     m = (a+b)/2   
 
     I = integrate(f, a, b, n)
