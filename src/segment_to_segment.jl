@@ -9,7 +9,6 @@ end
 function Preallocation(::SegmentToSegment, params::Constants) 
     @unpack segment_points, line_points = params
     P = [zeros(i+1, i+1) for i in segment_points]
-    #R = [zeros(i+1, (sum(line_points)+1)^2) for i in segment_points]
     M = [zeros(i+1) for i in segment_points]
     Preallocation(P=P, R=[zeros(0, 0) for i in segment_points], M=M)
 end
@@ -29,7 +28,7 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp,
     params = MeanSegToSegEvParams(setup)
     h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
     guide(r) = h_mean_sts(r*rb) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)
-    _, R̃, wz = adaptive_integration(guide, r_min/rb, r_max/rb)
+    _, R̃, wz = adaptive_integration(guide, r_min/rb, r_max/rb, tol=10^-12)
 
     f(r̃, k) = h_mean_sts(r̃*rb) * rb * besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
 

@@ -1,5 +1,4 @@
 using FiniteLineSource
-using FiniteLineSource: convolve_fls_step
 using WGLMakie
 using CairoMakie
 
@@ -18,7 +17,7 @@ function produce_plot_fls(r, line_points, label)
     precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
     compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 
-    C = convolve_step(q, setup, params=paramss)
+    C = convolve_step(q, setup, params=params)
 
     abs_error = abs.(C-I) 
     t = 1:length(q)
