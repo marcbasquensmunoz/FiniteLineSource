@@ -16,7 +16,7 @@ function integrate_x_w(f, a, b, n)
 end
 
 
-function adaptive_integration(f, a, b, tol = 10^-10, n = 3)
+function adaptive_integration(f, a, b; tol = 10^-10, n = 3)
     m = (a+b)/2   
 
     I = integrate(f, a, b, n)
@@ -27,8 +27,8 @@ function adaptive_integration(f, a, b, tol = 10^-10, n = 3)
     error = abs(I - I_sub)
 
     if error > tol 
-        In1, xn1, wn1 = adaptive_integration(f, a, m, tol)
-        In2, xn2, wn2 = adaptive_integration(f, m, b, tol)
+        In1, xn1, wn1 = adaptive_integration(f, a, m, tol=tol, n=n)
+        In2, xn2, wn2 = adaptive_integration(f, m, b, tol=tol, n=n)
         return In1 + In2, [xn1; xn2], [wn1; wn2]
     else
         return I_sub, [x1; x2], [w1; w2]

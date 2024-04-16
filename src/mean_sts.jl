@@ -17,6 +17,7 @@
     r3 = H2 > H1 ? (D2 + H2 > D1 + H1 ? rUR : rmin) : (D2 > D1 ? rLL : rmin)
     r4 = D2 + H2 > D1 ? rUL : rmin
 end
+MeanSegToSegEvParams(p::SegmentToSegment) = MeanSegToSegEvParams(D1=p.D1, H1=p.H1, D2=p.D2, H2=p.H2, σ=p.r)
 
 transpose(p::MeanSegToSegEvParams) = MeanSegToSegEvParams(D1=p.D2, H1=p.H2, D2=p.D1, H2=p.H1, σ=p.σ)
 

@@ -37,7 +37,9 @@ end
 function step_response(t, model::SegmentToSegment, params::Constants)
     @unpack r, D1, H1, D2, H2 = model
     @unpack α, kg = params
-    hcubature(ζ -> point_step_response(t, sqrt(r^2 + (ζ[1]-ζ[2])^2), α, kg), [D1, D2], [D1+H1, D2+H2])[1] / H2
+    params = MeanSegToSegEvParams(model)
+    h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
+    quadgk(r -> h_mean_sts(r) * point_step_response(t, r, α, kg), r_min, r_max)[1]
 end
 
 # Moving point source
