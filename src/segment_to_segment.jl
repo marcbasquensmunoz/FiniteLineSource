@@ -28,7 +28,7 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp,
     params = MeanSegToSegEvParams(setup)
     h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
     guide(r) = h_mean_sts(r*rb) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)
-    _, R̃, wz = adaptive_integration(guide, r_min/rb, r_max/rb, tol=10^-12)
+    R̃, wz = adaptive_gk(guide, r_min/rb, r_max/rb)
 
     f(r̃, k) = h_mean_sts(r̃*rb) * rb * besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
 

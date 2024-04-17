@@ -36,8 +36,10 @@ export MeanSegToSegEvParams, MidPointParams
 
 include("integration.jl")
 export integrate
+export IntegrationSegment
 
 include("self_response.jl")
 export compute_self_response
+
 
 end

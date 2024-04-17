@@ -1,5 +1,5 @@
 using FiniteLineSource
-using FiniteLineSource: adaptive_integration
+using FiniteLineSource: adaptive_gk
 using QuadGK
 using SpecialFunctions
 using Cubature
@@ -21,7 +21,8 @@ function adaptive(;t, rb, H, α, kg)
     params = MeanSegToSegEvParams(D1=0., H1=H, D2=0., H2=H, σ=rb)
     h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
     f(r) = h_mean_sts(r) * point_step_response(t, r, α, kg)
-    adaptive_integration(f, r_min, r_max)
+    x, w = adaptive_gk(f, r_min, r_max)
+    dot(f.(x), w)
 end
 
 # Example of computation of self response
@@ -45,4 +46,4 @@ kg = 3.
 @btime test_classical(t=t, rb=rb, H=H, α=α, kg=kg)
 
 # Adaptive discretization
-@btime I, x, w = adaptive(t=t, rb=rb, H=H, α=α, kg=kg)
+@btime adaptive(t=t, rb=rb, H=H, α=α, kg=kg)

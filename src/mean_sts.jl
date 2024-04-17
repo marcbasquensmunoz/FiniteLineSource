@@ -41,7 +41,7 @@ function mean_sts_evaluation(params::MeanSegToSegEvParams)
     paramsT = transpose(params)
     f(r) = L(r, params) + L(r, paramsT)
     h_mean_sts(r) = f(r) / params.H2
-    r_min = max(params.r1, paramsT.r1)
-    r_max = max(params.r4, paramsT.r4)
+    r_min = Base.max(params.r1, paramsT.r1)
+    r_max = Base.max(params.r4, paramsT.r4)
     return h_mean_sts, r_min, r_max
 end
