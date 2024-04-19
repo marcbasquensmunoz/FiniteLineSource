@@ -9,9 +9,7 @@ I = zeros(length(q))
 setup = SegmentToSegment(D1=5., H1=20., D2=5., H2=15., r=1.)
 
 params = Constants(Δt = 3600.)
-prealloc = Preallocation(setup, params) 
-
-precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
+precomp = precompute_parameters(setup, params=params)
 @time compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 I    
 

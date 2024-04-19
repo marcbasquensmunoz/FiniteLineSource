@@ -3,11 +3,6 @@
     r
 end
 
-function Preallocation(::PointToPoint, params::Constants) 
-    @unpack segment_points = params
-    Preallocation(P=[zeros(0, 0) for i in segment_points], R=[zeros(0, 0) for i in segment_points], M=[zeros(0) for i in segment_points])
-end
-
 function precompute_coefficients(setup::PointToPoint; dp, params::Constants)
     @unpack m, c, n, xt, w = dp
     @unpack r = setup

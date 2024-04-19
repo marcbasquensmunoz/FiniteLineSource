@@ -8,13 +8,8 @@ function produce_plot_sts(r, label)
 
     setup = SegmentToSegment(D1=5., H1=20., D2=5., H2=15., r=r)
 
-    segment_limits = [0., 0.01, 0.1, 0.5, 1., 3., 10.]
-    segment_points = 6 .* [10, 25, 10, 10, 10, 10]
-
-    params = Constants(Δt = 3600., segment_limits=segment_limits, segment_points=segment_points)
-    prealloc = Preallocation(setup, params) 
-
-    precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
+    params = Constants(Δt = 3600.)
+    precomp = precompute_parameters(setup, params=params)
     compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 
     C = convolve_step(q, setup, params=params)

@@ -6,14 +6,6 @@
     z
 end
 
-function Preallocation(::SegmentToPoint, params::Constants) 
-    @unpack segment_points, line_points = params
-    P = [zeros(i+1, i+1) for i in segment_points]
-    R = [zeros(i+1, sum(line_points) + length(line_points)) for i in segment_points]
-    M = [zeros(i+1) for i in segment_points]
-    Preallocation(P=P, R=R, M=M)
-end
-
 function precompute_z_weights(setup::SegmentToPoint; params::Constants)
     @unpack rb, α, line_points, line_limits = params
     @unpack D, H, r, z = setup

@@ -6,13 +6,6 @@
     r
 end
 
-function Preallocation(::SegmentToSegment, params::Constants) 
-    @unpack segment_points, line_points = params
-    P = [zeros(i+1, i+1) for i in segment_points]
-    M = [zeros(i+1) for i in segment_points]
-    Preallocation(P=P, R=[zeros(0, 0) for i in segment_points], M=M)
-end
-
 function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params

@@ -7,17 +7,8 @@ abstract type Setup end
     Δt = 3600.
 
     b = 10.
-
-    segment_limits::Vector{T} = [0., 0.01, 0.1, 0.5, 1., 3., 5., 7., 10.] 
-    segment_points::Vector{Int} = [10, 25, 15, 15, 20, 15, 15, 15]
-    line_points::Vector{Int} = [30]
-    line_limits::Vector{T} = [0., 1.]
-end
-
-@with_kw struct Preallocation{T <: Number}
-    P::Vector{Matrix{T}}
-    R::Vector{Matrix{T}}
-    M::Vector{Vector{T}}
+    line_points::Vector{Int} = [30, 30, 30]
+    line_limits::Vector{T} = [0., 0.4, 0.6, 1.]
 end
 
 @with_kw struct Precomputation{T <: Number}
@@ -50,8 +41,8 @@ function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomp
     return nothing
 end
 
-function precompute_parameters(setup::Setup; params::Constants, n = 20)
-    @unpack segment_limits, segment_points, Δt, b = params
+function precompute_parameters(setup::Setup; params::Constants, n = 20, n_tot = [0])
+    @unpack Δt, b = params
 
     f(z) = exp(-10*z^2*Δt) * (1 - exp(-z^2*Δt)) / z
     segments = adaptive_gk_segments(f, 0., b)
@@ -60,7 +51,7 @@ function precompute_parameters(setup::Setup; params::Constants, n = 20)
     v  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params) for (i, dp) in enumerate(dps)])
     fx = zeros(sum([dp.n+1 for dp in dps]))
     I_c = constant_integral(setup, params=params)
-    @show length(x)
+    n_tot[1] = length(x)
 
     return Precomputation(x=x, fx=fx, v=v, I_c=I_c)
 end
