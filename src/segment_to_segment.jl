@@ -13,11 +13,14 @@ function Preallocation(::SegmentToSegment, params::Constants)
     Preallocation(P=P, R=[zeros(0, 0) for i in segment_points], M=M)
 end
 
-function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp, P, R, M)
+function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
+
+    P = zeros(n+1, n+1)
+    M = zeros(n+1)
 
     for k in 0:n
         for s in 1:n+1

@@ -33,13 +33,17 @@ function precompute_z_weights(setup::SegmentToPoint; params::Constants)
     return (R=R, wz=wz, J=J)
 end
 
-function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, P, R, M)
+function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp)
     @unpack m, c, n, xt, w = dp
     @unpack D, H, r, z = setup
     @unpack rb, kg = params
 
     R̃, wz, J = precompute_z_weights(setup, params=params)
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
+
+    P = zeros(n+1, n+1)
+    R = zeros(n+1, length(R̃))
+    M = zeros(n+1)
 
     for k in 0:n
         for s in 1:n+1
@@ -52,7 +56,6 @@ function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, P
             R[k+1, i] = besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
         end
     end
-
 
     M .= R * diagm(J) * wz
     M .= P * M 

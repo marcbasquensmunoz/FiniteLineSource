@@ -6,6 +6,8 @@ abstract type Setup end
     kg = 3.
     Δt = 3600.
 
+    b = 10.
+
     segment_limits::Vector{T} = [0., 0.01, 0.1, 0.5, 1., 3., 5., 7., 10.] 
     segment_points::Vector{Int} = [10, 25, 15, 15, 20, 15, 15, 15]
     line_points::Vector{Int} = [30]
@@ -48,14 +50,17 @@ function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomp
     return nothing
 end
 
-function precompute_parameters(setup::Setup; prealloc::Preallocation, params::Constants)
-    @unpack segment_limits, segment_points = params
-    dps = @views [discretization_parameters(a,b,n) for (a,b,n) in zip(segment_limits[1:end-1], segment_limits[2:end], segment_points)] 
-    
+function precompute_parameters(setup::Setup; params::Constants, n = 20)
+    @unpack segment_limits, segment_points, Δt, b = params
+
+    f(z) = exp(-10*z^2*Δt) * (1 - exp(-z^2*Δt)) / z
+    segments = adaptive_gk_segments(f, 0., b)
+    dps = @views [discretization_parameters(s.a, s.b, n) for s in segments]
     x  = reduce(vcat, (dp.x for dp in dps)) 
-    v  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params, P=prealloc.P[i], R=prealloc.R[i], M=prealloc.M[i]) for (i, dp) in enumerate(dps)])
+    v  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params) for (i, dp) in enumerate(dps)])
     fx = zeros(sum([dp.n+1 for dp in dps]))
     I_c = constant_integral(setup, params=params)
+    @show length(x)
 
     return Precomputation(x=x, fx=fx, v=v, I_c=I_c)
 end

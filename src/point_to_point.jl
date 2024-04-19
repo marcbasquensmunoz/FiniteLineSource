@@ -8,14 +8,14 @@ function Preallocation(::PointToPoint, params::Constants)
     Preallocation(P=[zeros(0, 0) for i in segment_points], R=[zeros(0, 0) for i in segment_points], M=[zeros(0) for i in segment_points])
 end
 
-function precompute_coefficients(setup::PointToPoint; dp, params::Constants, P, R, M)
+function precompute_coefficients(setup::PointToPoint; dp, params::Constants)
     @unpack m, c, n, xt, w = dp
     @unpack r = setup
     @unpack rb, kg = params
 
-    Ω = dp.m * r / rb
-    C = dp.m * exp(im * r / rb * dp.c) / (2 * π^2 * r * kg)
-    v = [ sum([imag(C * (im)^k) *(2k+1) * sqrt(π/(2Ω)) * besselj(k+1/2, Ω)*Pl.(dp.xt[s],k) for k =0:dp.n]) * dp.w[s] for s=1:dp.n+1]
+    Ω = m * r / rb
+    C = m * exp(im * r / rb * c) / (2 * π^2 * r * kg)
+    v = [ sum([imag(C * (im)^k) * (2k+1) * sqrt(π/(2Ω)) * besselj(k+1/2, Ω)*Pl.(xt[s],k) for k =0:n]) * w[s] for s=1:n+1]
 
     return v
 end

@@ -15,6 +15,27 @@ end
 end
 Base.isless(x::IntegrationSegment{Float64}, y::IntegrationSegment{Float64}) = x.E < y.E
 
+function adaptive_gk_segments(f, a, b; rtol = sqrt(eps()))
+    x, w, gw = QuadGK.kronrod(8)
+    heap = MutableBinaryMaxHeap{IntegrationSegment{Float64}}()
+
+    I, E = evalrule(f, a, b, x, w, gw)
+    push!(heap, IntegrationSegment(a, b, I, E))
+
+    while E > rtol * abs(I)
+        s = pop!(heap)
+        mid = (s.a+s.b) * 0.5
+        I1, E1 = evalrule(f, s.a, mid, x, w, gw)
+        I2, E2 = evalrule(f, mid, s.b, x, w, gw)
+        I = I - s.I + I1 + I2
+        E = E - s.E + E1 + E2
+        push!(heap, IntegrationSegment(s.a, mid, I1, E1))
+        push!(heap, IntegrationSegment(mid, s.b, I2, E2))
+    end
+
+    extract_all!(heap)
+end
+
 function adaptive_gk(f, a, b; rtol = sqrt(eps()))
     x, w, gw = QuadGK.kronrod(8)
     heap = MutableBinaryMaxHeap{IntegrationSegment{Float64}}()
