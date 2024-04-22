@@ -12,17 +12,17 @@ function precompute_z_weights(setup::SegmentToPoint; params::Constants)
 
     R = zeros(0)
     wz = zeros(0)
-    J = zeros(0)
 
     limits = line_limits .* H .+ D
 
     for (a, b, n) in zip(limits[1:end-1], limits[2:end], line_points) 
         @unpack x, m, w = discretization_parameters(a, b, n)
-        append!(J, m .* ones(length(w)))
         append!(R, @. sqrt(r^2 + (z - x)^2) / rb)
-        append!(wz, w)
+        append!(wz, m .* w)
     end
-    return (R=R, wz=wz, J=J)
+
+    @show length(R)
+    return (R=R, wz=wz)
 end
 
 function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp)
@@ -30,7 +30,7 @@ function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp)
     @unpack D, H, r, z = setup
     @unpack rb, kg = params
 
-    R̃, wz, J = precompute_z_weights(setup, params=params)
+    R̃, wz = precompute_z_weights(setup, params=params)
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
     P = zeros(n+1, n+1)
@@ -49,7 +49,7 @@ function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp)
         end
     end
 
-    M .= R * diagm(J) * wz
+    M .= R * wz
     M .= P * M 
 
     return C .* M
