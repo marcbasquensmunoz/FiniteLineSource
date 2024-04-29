@@ -66,4 +66,3 @@ function has_heatwave_arrived(setup::SegmentToSegment; params::Constants, t)
 
     d2 / (2α*t) < threshold^2
 end
-

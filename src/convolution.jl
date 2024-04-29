@@ -42,6 +42,10 @@ function step_response(t, model::SegmentToSegment, params::Constants)
     quadgk(r -> h_mean_sts(r) * point_step_response(t, r, α, kg), r_min, r_max)[1]
 end
 
+function step_response(t, model::SegmentToSegmentOld, params::Constants)
+    step_response(t, SegmentToSegment(model), params)
+end
+
 # Moving point source
 function step_response(t, model::MovingPointToPoint, params::Constants)
     @unpack r, x, v = model
