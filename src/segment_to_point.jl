@@ -21,7 +21,6 @@ function precompute_z_weights(setup::SegmentToPoint; params::Constants)
         append!(wz, m .* w)
     end
 
-    @show length(R)
     return (R=R, wz=wz)
 end
 

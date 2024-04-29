@@ -60,6 +60,7 @@ vlines!(segment_limits, colors= :blue, linewidth=1)
 ax2 = Axis(ff, bbox = BBox(327, 570, 130, 230), xticklabelsize = 12, yticklabelsize = 12, title = "zoomed view")
 xlims!(ax2, 0, 0.5)
 ax2.xticks = 0:0.1:0.5
+hidedecorations!(ax2, ticks=false, ticklabels=false)
 lines!(ax2, x[perm], Fx[10000,perm], color= :black, strokewidth = 0.5, label = "1", linewidth=0.5)
 scatter!(ax2,  x[1:2:end], Fx[10000,:][1:2:end], color=:blue, markersize=4)
 vspan!(segment_limits[1:end-1], segment_limits[2:end], color = colors)
