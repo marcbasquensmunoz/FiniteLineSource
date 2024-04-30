@@ -24,8 +24,9 @@ include("segment_to_point.jl")
 include("segment_to_segment.jl")
 include("segment_to_segment_old.jl")
 include("moving_point.jl")
+include("moving_segment.jl")
 include("convolution.jl")
-export PointToPoint, SegmentToPoint, SegmentToSegment, SegmentToSegmentOld, MovingPointToPoint
+export PointToPoint, SegmentToPoint, SegmentToSegment, SegmentToSegmentOld, MovingPointToPoint, MovingSegmentToPoint
 export convolve_step, step_response
 export Constants, Preallocation
 export precompute_parameters, compute_integral_throught_history!

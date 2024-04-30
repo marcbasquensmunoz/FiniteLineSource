@@ -43,12 +43,6 @@ function constant_integral(setup::SegmentToSegment; params::Constants)
     1/(4π*kg*H2) * (I(D1+H1-D2-H2) + I(D1-D2) - I(D1-H2-D2) - I(D1+H1-D2))
 end
 
-function analytical_test(setup::SegmentToSegment; params::Constants, t) 
-    @unpack D1, H1, D2, H2, r = setup
-    @unpack kg, α = params
-    quadgk(z -> quadgk(ζ -> 1/(4π*kg*H2*sqrt(r^2+(z-ζ)^2)) * erfc(sqrt(r^2+(z-ζ)^2)/sqrt(4α*t)), D1, H1+D1, atol=10^-16, order=20)[1], D2, D2+H2, atol=10^-16, order=20)
-end
-
 function has_heatwave_arrived(setup::SegmentToSegment; params::Constants, t)
     @unpack D1, H1, D2, H2, r = setup
     @unpack α = params

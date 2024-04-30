@@ -71,9 +71,3 @@ function has_heatwave_arrived(setup::SegmentToPoint; params::Constants, t)
         r^2 + min((D-z)^2, (D+H-z)^2) / (4α*t) < threshold^2
     end
 end
-
-function analytical_test(setup::SegmentToPoint; params::Constants, t) 
-    @unpack kg, α = params
-    @unpack D, H, z, r = setup
-    quadgk(ζ -> 1/(4π*kg*sqrt(r^2+(z-ζ)^2)) * erfc(sqrt(r^2+(z-ζ)^2)/sqrt(4α*t)), D, H+D, atol=10^-16, order=20)
-end

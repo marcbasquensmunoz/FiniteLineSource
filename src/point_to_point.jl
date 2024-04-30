@@ -27,9 +27,3 @@ function has_heatwave_arrived(setup::PointToPoint; params::Constants, t)
     threshold = 8
     r^2 / (2α*t) < threshold^2
 end
-
-function analytical_test(setup::PointToPoint; params::Constants, t)
-    @unpack r = setup
-    @unpack α, kg = params
-    erfc(r/(2*sqrt(t*α))) / (4*π*r*kg)
-end

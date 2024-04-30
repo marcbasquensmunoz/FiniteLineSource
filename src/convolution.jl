@@ -52,3 +52,16 @@ function step_response(t, model::MovingPointToPoint, params::Constants)
     @unpack α, kg = params
     exp(v * (x-r)/ (2α)) * (erfc( (r-t*v) / sqrt(4t*α)) + exp(v*r/α) * erfc((r+t*v) / sqrt(4t*α)) ) / (8π*r*kg)
 end
+
+function step_response(t, model::MovingSegmentToPoint, params::Constants)
+    @unpack σ, x, z, v, D, H = model
+    @unpack α, kg = params
+    function f(ζ) 
+        val = exp(v * (x-sqrt(σ^2 + (z-ζ)^2))/ (2α)) * (erfc( (sqrt(σ^2 + (z-ζ)^2)-t*v) / sqrt(4t*α)) + exp(v*sqrt(σ^2 + (z-ζ)^2)/α) * erfc((sqrt(σ^2 + (z-ζ)^2)+t*v) / sqrt(4t*α)) ) / (8π*sqrt(σ^2 + (z-ζ)^2)*kg)
+        if isnan(val)
+            return 0.
+        end
+        val
+    end
+    quadgk(ζ -> f(ζ), D, D+H)[1]
+end
