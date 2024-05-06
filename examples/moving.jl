@@ -73,10 +73,9 @@ I = zeros(length(q))
 segment_limits = [0., 0.01, 0.1, 0.5, 1., 3., 10.]
 segment_points = 4 .* [10, 25, 10, 10, 10, 10]
 
-setup = MovingPointToPoint(x=0.1, σ=0., v=0.005)
-params = Constants(Δt=Δt, segment_limits=segment_limits, segment_points=segment_points)
-prealloc = Preallocation(setup, params)  
-precomp = precompute_parameters(setup, prealloc=prealloc, params=params)
+setup = MovingPointToPoint(x=1., σ=1., v=10^-4)
+params = Constants(Δt=Δt)
+precomp = precompute_parameters(setup, params=params)
 compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 
 C = FiniteLineSource.convolve_step(q, setup, params=params)

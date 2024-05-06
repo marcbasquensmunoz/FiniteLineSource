@@ -1,4 +1,5 @@
 abstract type Setup end
+gettype(::Setup) = Float64
 
 @with_kw struct Constants{T <: Number} @deftype T
     rb = .1
@@ -21,6 +22,11 @@ end
 exponential_integral(fx, v) = dot(fx, v)
 f_evolve_1!(::Setup, fx, x, Ct, q, params::Constants) = @. fx = Ct * (fx - q/x)
 f_evolve_2!(::Setup, fx, x, q, params::Constants)     = @. fx = fx + q / x
+function f_guess(setup::Setup, params::Constants) 
+    @unpack Δt = params
+    f(z) = exp(-10*z^2*Δt) * (1 - exp(-z^2*Δt)) / z
+    f
+end
 
 function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomputation, params::Constants)
     @unpack rb, α, Δt = params
@@ -43,13 +49,13 @@ end
 
 function precompute_parameters(setup::Setup; params::Constants, n = 20, n_tot = [0])
     @unpack Δt, b = params
+    type = gettype(setup)
 
-    f(z) = exp(-10*z^2*Δt) * (1 - exp(-z^2*Δt)) / z
-    segments = adaptive_gk_segments(f, 0., b)
+    segments = adaptive_gk_segments(f_guess(setup, params), convert(type, 0.), convert(type, b))
     dps = @views [discretization_parameters(s.a, s.b, n) for s in segments]
     x  = reduce(vcat, (dp.x for dp in dps)) 
     v  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params) for (i, dp) in enumerate(dps)])
-    fx = zeros(sum([dp.n+1 for dp in dps]))
+    fx = zeros(type, sum([dp.n+1 for dp in dps]))
     I_c = constant_integral(setup, params=params)
     n_tot[1] = length(x)
 

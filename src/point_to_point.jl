@@ -25,5 +25,5 @@ function has_heatwave_arrived(setup::PointToPoint; params::Constants, t)
     @unpack r = setup
     @unpack α = params
     threshold = 8
-    r^2 / (2α*t) < threshold^2
+    r^2 / (4α*t) < threshold^2
 end

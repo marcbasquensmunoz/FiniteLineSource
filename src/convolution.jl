@@ -50,7 +50,10 @@ end
 function step_response(t, model::MovingPointToPoint, params::Constants)
     @unpack r, x, v = model
     @unpack α, kg = params
-    exp(v * (x-r)/ (2α)) * (erfc( (r-t*v) / sqrt(4t*α)) + exp(v*r/α) * erfc((r+t*v) / sqrt(4t*α)) ) / (8π*r*kg)
+    if v*r/α > 700 && (r+t*v) / sqrt(4t*α) > 6 # Avoid NaN
+        return exp(-v * (r-x)/ (2α)) * (erfc( (r-t*v) / sqrt(4t*α))) / (8π*r*kg)
+    end
+    exp(-v * (r-x)/ (2α)) * (erfc( (r-t*v) / sqrt(4t*α)) + erfc((r+t*v) / sqrt(4t*α)) * exp(v*r/α) ) / (8π*r*kg)
 end
 
 function step_response(t, model::MovingSegmentToPoint, params::Constants)
