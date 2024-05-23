@@ -15,11 +15,11 @@ end
 @with_kw struct Precomputation{T <: Number}
     x::Vector{T}
     fx::Vector{T}
-    v::Vector{T}
+    w::Vector{T}
     I_c::T
 end
 
-exponential_integral(fx, v) = dot(fx, v)
+integral_formula(::Setup, ::Constants, fx, w, q, I_c) = dot(fx, w) + q * I_c
 f_evolve_1!(::Setup, fx, x, Ct, q, params::Constants) = @. fx = Ct * (fx - q/x)
 f_evolve_2!(::Setup, fx, x, q, params::Constants)     = @. fx = fx + q / x
 function f_guess(setup::Setup, params::Constants) 
