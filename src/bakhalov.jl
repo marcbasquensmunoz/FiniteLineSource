@@ -30,14 +30,14 @@ end
 
 function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomputation, params::Constants)
     @unpack rb, α, Δt = params
-    @unpack x, fx, v, I_c = precomp
+    @unpack x, fx, w, I_c = precomp
 
     Δt̃ = α*Δt/rb^2
     Ct = @. exp(-x^2*Δt̃)
     for k in eachindex(I)
         @inbounds f_evolve_1!(setup, fx, x, Ct, q[k], params)
         if has_heatwave_arrived(setup, params=params, t=Δt*k)
-            @inbounds I[k] = exponential_integral(fx, v) + q[k] * I_c
+            @inbounds I[k] = integral_formula(setup, params, fx, w, q[k], I_c)
         else 
             @inbounds I[k] = 0.
         end
@@ -54,12 +54,12 @@ function precompute_parameters(setup::Setup; params::Constants, n = 20, n_tot = 
     segments = adaptive_gk_segments(f_guess(setup, params), convert(type, 0.), convert(type, b))
     dps = @views [discretization_parameters(s.a, s.b, n) for s in segments]
     x  = reduce(vcat, (dp.x for dp in dps)) 
-    v  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params) for (i, dp) in enumerate(dps)])
+    w  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params) for (i, dp) in enumerate(dps)])
     fx = zeros(type, sum([dp.n+1 for dp in dps]))
     I_c = constant_integral(setup, params=params)
     n_tot[1] = length(x)
 
-    return Precomputation(x=x, fx=fx, v=v, I_c=I_c)
+    return Precomputation(x=x, fx=fx, w=w, I_c=I_c)
 end
 
 function discretization_parameters(a, b, n)

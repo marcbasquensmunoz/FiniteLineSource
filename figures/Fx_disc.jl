@@ -26,10 +26,10 @@ r=1.
 setup = PointToPoint(r=r)
 params = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 precomp = precompute_parameters(setup, params=params)
-@unpack x, fx, v = precomp
+@unpack x, fx, w = precomp
 
 guide(z) = exp(-10*z^2*Δt) * (1 - exp(-z^2*Δt)) / z
-segments = adaptive_gk_segments(guide, 0., 10.)
+segments = FiniteLineSource.adaptive_gk_segments(guide, 0., 10.)
 segment_limits = sort(union([s.a for s in segments], [s.b for s in segments]))
 #x, w = adaptive_gk(guide, 0., 10.)
 
