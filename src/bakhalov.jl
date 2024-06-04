@@ -22,7 +22,7 @@ end
 integral_formula(::Setup, ::Constants, fx, w, q, I_c) = dot(fx, w) + q * I_c
 f_evolve_1!(::Setup, fx, x, Ct, q, params::Constants) = @. fx = Ct * (fx - q/x)
 f_evolve_2!(::Setup, fx, x, q, params::Constants)     = @. fx = fx + q / x
-function f_guess(setup::Setup, params::Constants) 
+function f_guess(::Setup, params::Constants) 
     @unpack Δt = params
     f(z) = exp(-10*z^2*Δt) * (1 - exp(-z^2*Δt)) / z
     f
