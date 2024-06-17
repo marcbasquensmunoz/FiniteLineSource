@@ -16,7 +16,7 @@ end
 Base.isless(x::IntegrationSegment{T}, y::IntegrationSegment{T}) where T <: Number = x.E < y.E
 
 function adaptive_gk_segments(f, a::T, b::T; rtol = sqrt(eps())) where T <: Number
-    n_pre = Int(floor(b-a) / 2)
+    n_pre = Int(floor((b-a) / 2))
     n = max(n_pre%2 == 0 ? n_pre : n_pre+1, 8)
     x, w, gw = QuadGK.kronrod(n)
     heap = MutableBinaryMaxHeap{IntegrationSegment{T}}()

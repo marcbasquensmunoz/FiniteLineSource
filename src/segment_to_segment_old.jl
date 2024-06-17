@@ -3,12 +3,12 @@
     H1
     D2
     H2
-    r
+    σ
 end
-SegmentToSegment(old::SegmentToSegmentOld) = SegmentToSegment(D1=old.D1, H1=old.H1, D2=old.D2, H2=old.H2, r=old.r)
+SegmentToSegment(old::SegmentToSegmentOld) = SegmentToSegment(D1=old.D1, H1=old.H1, D2=old.D2, H2=old.H2, σ=old.σ)
 
 function precompute_z_weights(setup::SegmentToSegmentOld; params::Constants)
-    @unpack D1, H1, D2, H2, r = setup
+    @unpack D1, H1, D2, H2, σ = setup
     @unpack rb, line_points = params
 
     zt, wz = gausslegendre(sum(line_points)+1)   
@@ -18,7 +18,7 @@ function precompute_z_weights(setup::SegmentToSegmentOld; params::Constants)
     ζ1 = @. J1 * (zt + 1) + D1
     ζ2 = @. J2 * (zt + 1) + D2
     
-    R̃ = [sqrt(r^2 + (z2 - z1)^2) / rb for z1 in ζ1 for z2 in ζ2]
+    R̃ = [sqrt(σ^2 + (z2 - z1)^2) / rb for z1 in ζ1 for z2 in ζ2]
     w = [w1*w2 for w1 in wz for w2 in wz]
     return (R̃=R̃, w=w, J=J1*J2/H2)
 end
@@ -54,23 +54,23 @@ end
 
 function constant_integral(setup::SegmentToSegmentOld; params::Constants)
     @unpack kg, α = params
-    @unpack D1, H1, D2, H2, r = setup
-    I(d) = sqrt(r^2+d^2) + d * log(sqrt(r^2+d^2) - d)
+    @unpack D1, H1, D2, H2, σ = setup
+    I(d) = sqrt(σ^2+d^2) + d * log(sqrt(σ^2+d^2) - d)
     1/(4π*kg*H2) * (I(D1+H1-D2-H2) + I(D1-D2) - I(D1-H2-D2) - I(D1+H1-D2))
 end
 
 function has_heatwave_arrived(setup::SegmentToSegmentOld; params::Constants, t)
-    @unpack D1, H1, D2, H2, r = setup
+    @unpack D1, H1, D2, H2, σ = setup
     @unpack α = params
     threshold = 8
 
     if D2 >= D1 && D2 <= D1+H1 || D1 >= D2 && D1 <= D2+H2
-        d2 = r^2
+        d2 = σ^2
     else 
         if D2 > D1+H1
-            d2 = r^2 + (D2-D1-H1)^2 
+            d2 = σ^2 + (D2-D1-H1)^2 
         else 
-            d2 = r^2 + (D1-D2-H2)^2 
+            d2 = σ^2 + (D1-D2-H2)^2 
         end
     end
 
