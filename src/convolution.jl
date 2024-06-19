@@ -35,7 +35,7 @@ end
 
 # Mean segment to segment
 function step_response(t, model::SegmentToSegment, params::Constants)
-    @unpack r, D1, H1, D2, H2 = model
+    @unpack σ, D1, H1, D2, H2 = model
     @unpack α, kg = params
     params = MeanSegToSegEvParams(model)
     h_mean_sts, r_min, r_max = mean_sts_evaluation(params)

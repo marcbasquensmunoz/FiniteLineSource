@@ -33,8 +33,9 @@ export precompute_parameters, compute_integral_throught_history!
 
 include("mean_sts.jl")
 include("midpoint.jl")
-export mean_sts_evaluation, midpoint_evaluation
-export MeanSegToSegEvParams, MidPointParams
+include("mean_internal.jl")
+export mean_sts_evaluation, midpoint_evaluation, mean_internal_evaluation
+export MeanSegToSegEvParams, MidPointParams, InternalSegToSegEvParams
 
 include("integration.jl")
 export integrate
@@ -43,5 +44,7 @@ export IntegrationSegment
 include("self_response.jl")
 export compute_self_response
 
+include("continuous.jl")
+export compute_coefficients_through_history, precompute_matrices, legendre_coeffs
 
 end
