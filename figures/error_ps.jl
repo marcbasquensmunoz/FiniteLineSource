@@ -1,6 +1,7 @@
 using FiniteLineSource
 using FiniteLineSource: convolve_step
 using WGLMakie
+using WGLMakie: density!
 using CairoMakie
 using LaTeXStrings
 
