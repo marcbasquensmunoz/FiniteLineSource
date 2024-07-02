@@ -3,6 +3,7 @@ using FiniteLineSource
 using FiniteLineSource: point_step_response, step_response
 using QuadGK
 using FastGaussQuadrature
+using LinearAlgebra
 
 Ds = 0.
 Hs = 10.
@@ -10,8 +11,8 @@ Hs = 10.
 Dt = 0.
 Ht = 10.
 
-σ = 1.
-t = 5*24*3600.
+σ = 0.1
+t = 3600.#5*24*3600.
 
 mf = 1.
 cf = 4000.
@@ -21,14 +22,25 @@ kg = 3.
 
 Tfinput = 300.
 
-q(z) = 0.05 * (Hs^2/4 - (z-Hs/2)^2) + 1
-plot(Ds:0.01:Ds+Hs, q.(Ds:0.01:Ds+Hs))
+Q(z) = 0.05 * (Hs^2/4 - (z-Hs/2)^2) + 1
+plot(Ds:0.01:Ds+Hs, Q.(Ds:0.01:Ds+Hs))
 
-n = 5   # Segments
+n = 6   # Segments
 m = 100  # Points per segment
 
 params = Constants()
 A = [-0.00396062862871448 -0.0002694126315114766; 0.0002694126315114766 0.00396062862871448]
+
+# Shape of weight function
+L = 10
+xx = 0:0.01:L
+f(z) =  sum([1 -1]*exp(A*(L-z))*A*[1;1]) / sum([1 -1]*exp(A*L)*[1;1])
+plot(xx, f.(xx))
+##
+
+I1 = quadgk(z1 -> quadgk(z2 -> f(z2)*point_step_response(t, sqrt(σ^2 + (z1-z2)^2), α, kg), 0, L)[1], 0, L)
+I2 = quadgk(z1 -> quadgk(z2 ->  1/L *point_step_response(t, sqrt(σ^2 + (z1-z2)^2), α, kg), 0, L)[1], 0, L)
+##
 
 zz = zeros(n*m)
 ww = zeros(n*m)
@@ -43,7 +55,7 @@ end
 
 Ez = map(z -> exp(A*z), zz)
 
-Tb_real(z) = quadgk(ζ -> q(ζ) * point_step_response(t, sqrt(σ^2 + (z-ζ)^2), α, kg), Ds, Ds+Hs, atol=1e-16)[1] 
+Tb_real(z) = quadgk(ζ -> Q(ζ) * point_step_response(t, sqrt(σ^2 + (z-ζ)^2), α, kg), Ds, Ds+Hs, atol=1e-16)[1] 
 
 Tbint = [quadgk(z -> exp(A*(Dt + i*Ht/n-z))*A*[1,1] .* Tb_real(z), Dt + (i-1)*Ht/n, Dt + i*Ht/n, atol=1e-16)[1] for i in 1:n]
 
@@ -103,8 +115,8 @@ function Tb_sts(i, j)
     t1 = Dt + (j-1)*Ht/n
     t2 = Dt + j*Ht/n
 
-    Q = quadgk(z -> q(z), s1, s2)[1] / (s2 - s1)
-    Q * step_response(t, SegmentToSegment(D1=s1, H1=s2-s1, D2=t1, H2=t2-t1, r=σ), params)
+    q = quadgk(z -> Q(z), s1, s2)[1] / (s2 - s1)
+    q * step_response(t, SegmentToSegment(D1=s1, H1=s2-s1, D2=t1, H2=t2-t1, σ=σ), params)
 end
 
 Tb_sts_val = [Tb_sts(i, j) for i in 1:n, j in 1:n]
@@ -131,7 +143,7 @@ plot!(zz, Tbz_sts)
 plot!(zz, Tbz_new) 
 plot!(zz, Tbz_simple_new) 
 
-plot(zz, Tbz_new - Tbz_simple_new)
+plot(zz, Tbz_new - Tbz_sts)
 
 EH = exp(A*Ht) 
 Ein = EH[2, 1] - EH[1, 1]
@@ -179,3 +191,22 @@ function error(i)
 end
 
 error.(1:n)
+
+#### h of new 
+i=2
+tt(i) = i == 0 ? 0. : Dt + i*Ht/n
+params_mean = MeanSegToSegEvParams(D1=Ds, H1=Ds+Hs, D2=tt(i-1), H2=tt(i)-tt(i-1), σ=σ)
+params = InternalSegToSegEvParams(D1=Ds, H1=Ds+Hs, D2=tt(i-1), H2=tt(i)-tt(i-1), σ=σ, A=A)
+
+h_mean, r_min, r_max = mean_sts_evaluation(params_mean)
+h_new, _, _ = mean_internal_evaluation(params)
+
+rr = r_min:0.01:r_max
+
+plot(rr, h_mean.(rr))
+plot!(rr, h_new.(rr))
+
+diff_h = h_mean.(rr) -  h_new.(rr)
+sum(abs.(diff_h[2:end]))
+
+plot(rr, diff_h)
