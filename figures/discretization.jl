@@ -60,5 +60,6 @@ text!(ax, 0.4, 0.2*H ; text = L"N=11", fontsize = 22, align = (:center, :center)
 
 xlims!(ax,-0.55,0.6)
 fig
+save("figures/segmentdiscretization.pdf", fig)
 
 
