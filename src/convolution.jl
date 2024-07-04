@@ -28,9 +28,9 @@ end
 
 # Segment to point
 function step_response(t, model::SegmentToPoint, params::Constants)
-    @unpack r, D, H, z = model
+    @unpack σ, D, H, z = model
     @unpack α, kg = params
-    quadgk(ζ -> point_step_response(t, sqrt(r^2 + (z-ζ)^2), α, kg), D, D+H)[1]
+    quadgk(ζ -> point_step_response(t, sqrt(σ^2 + (z-ζ)^2), α, kg), D, D+H)[1]
 end
 
 # Mean segment to segment

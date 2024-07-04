@@ -3,12 +3,12 @@ using WGLMakie
 using CairoMakie
 
 
-function produce_plot_fls(r, line_points, plot)        
+function produce_plot_fls(σ, line_points, plot)        
     q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
     I = zeros(length(q))
 
-    setup = SegmentToPoint(D=0., H=60., r=r, z=30.)
-    params = Constants(Δt = 3600., line_points=line_points, line_limits=[0., 0.3, 0.5, 0.7, 1.])
+    setup = SegmentToPoint(D=0., H=10., σ=σ, z=5.)
+    params = Constants(Δt = 3600., line_points=line_points, line_limits=[0., 0.5, 1.])#[0., 0.3, 0.5, 0.7, 1.])
 
     precomp = precompute_parameters(setup, params=params)
     compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
@@ -26,8 +26,9 @@ end
 ####
 
 rs = [0.1, 1, 10, 100]
-points = [0.5, 1, 2, 3, 4]
-discretization = [20, 30, 30, 20]
+points = [1, 2, 3, 4, 6]
+#discretization = [20, 30, 30, 20]
+discretization = [10, 10]
 ff = Figure(size = (1000,1000))
 grid = ff[1, 1] = GridLayout()
 axis = Matrix{Axis}(undef, length(rs), length(points))
@@ -37,9 +38,9 @@ limits = (-17, 0)
 
 for (i, r) in enumerate(rs)
     for (j, p) in enumerate(points)
-        axis[i, j] = Axis(grid[i, j], limits=(xlimits, limits), ylabel=j==1 ? L"\mathbf{\tilde{r}=%$(Int(r/0.1))}" : "", ylabelrotation = 0)
+        axis[i, j] = Axis(grid[i, j], limits=(xlimits, limits), ylabel=j==1 ? L"\mathbf{\tilde{\sigma}=%$(Int(r/0.1))}" : "", ylabelrotation = 0)
         real_points = produce_plot_fls(r, p .* discretization, axis[i, j])    
-        axis[i, j].title = i==1 ? L"\mathbf{\sum N = %$(Int(p * sum(discretization)))}" : ""
+        axis[i, j].title = i==1 ? L"\mathbf{\sum N = %$(Int(p * sum(discretization) + length(discretization)))}" : ""
     end     
 end
 for i in 1:length(rs)-1
@@ -67,4 +68,4 @@ rowgap!(grid, 5)
 ff
 
 CairoMakie.activate!()
-save("figures/error_fls.pdf", ff)
+save("figures/error_stp.pdf", ff)
