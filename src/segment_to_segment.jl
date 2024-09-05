@@ -1,19 +1,34 @@
-@with_kw struct SegmentToSegment{T <: Number} <: Setup @deftype T
+struct SegmentToSegment <: Setup
     D1
     H1
     D2
     H2
     σ
 end
+function SegmentToSegment(;D1, H1, D2, H2, σ)
+    lowest = min(min(D1, D1+H1), min(D2, D2+H2))
+    if lowest < 0
+        lowest = abs(lowest)
+        nD1, nH1 = min(D1+lowest, D1+H1+lowest), max(D1+lowest, D1+H1+lowest) - min(D1+lowest, D1+H1+lowest)
+        nD2, nH2 = min(D2+lowest, D2+H2+lowest), max(D2+lowest, D2+H2+lowest) - min(D2+lowest, D2+H2+lowest)
+        SegmentToSegment(nD1, nH1, nD2, nH2, σ)
+    else 
+        return SegmentToSegment(D1, H1, D2, H2, σ)
+    end
+end
 
-function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp)
+function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp, P = nothing, M = nothing)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
-    P = zeros(n+1, n+1)
-    M = zeros(n+1)
+    if isnothing(P)
+        P = zeros(n+1, n+1)
+    end
+    if isnothing(M)
+        M = zeros(n+1)
+    end
 
     for k in 0:n
         for s in 1:n+1
@@ -37,10 +52,10 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp)
 end
 
 function constant_integral(setup::SegmentToSegment; params::Constants)
-    @unpack kg, α = params
+    @unpack kg = params
     @unpack D1, H1, D2, H2, σ = setup
-    I(d) = sqrt(σ^2+d^2) + d * log(sqrt(σ^2+d^2) - d)
-    1/(4π*kg*H2) * (I(D1+H1-D2-H2) + I(D1-D2) - I(D1-H2-D2) - I(D1+H1-D2))
+    β(d) = sqrt(σ^2+d^2) + d * log(sqrt(σ^2+d^2) - d)
+    1/(4π*kg*H2) * (β(D1+H1-D2-H2) + β(D1-D2) - β(D1-H2-D2) - β(D1+H1-D2))
 end
 
 function has_heatwave_arrived(setup::SegmentToSegment; params::Constants, t)

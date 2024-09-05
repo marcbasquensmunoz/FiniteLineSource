@@ -8,15 +8,10 @@
 
     rmin = σ
 
-    rLRp = sqrt(σ^2 + (D2 - D1 - H1)^2     ) 
-    rLLp = sqrt(σ^2 + (D2 - D1)^2          )
-    rULp = sqrt(σ^2 + (D1 - D2 - H2)^2     ) 
-    rURp = sqrt(σ^2 + (D2 + H2 - D1 - H1)^2)
-
-    rLR = H1 > 0 ? (H2 > 0 ? rLRp : rURp) : (H2 > 0 ? rLLp : rULp)
-    rLL = H1 > 0 ? (H2 > 0 ? rLLp : rULp) : (H2 > 0 ? rLRp : rURp)
-    rUL = H1 > 0 ? (H2 > 0 ? rULp : rLLp) : (H2 > 0 ? rURp : rLRp)
-    rUR = H1 > 0 ? (H2 > 0 ? rURp : rLRp) : (H2 > 0 ? rULp : rLLp)
+    rLR = sqrt(σ^2 + (D2 - D1 - H1)^2     ) 
+    rLL = sqrt(σ^2 + (D2 - D1)^2          )
+    rUL = sqrt(σ^2 + (D1 - D2 - H2)^2     ) 
+    rUR = sqrt(σ^2 + (D2 + H2 - D1 - H1)^2)
 
     r1 = D2 > D1 + H1 ? rLR : rmin
     r2 = H2 > H1 ? (D2 > D1 ? rLL : rmin) : (D2 + H2 > D1 + H1 ? rUR : rmin)
@@ -24,13 +19,6 @@
     r4 = D2 + H2 > D1 ? rUL : rmin
 end
 MeanSegToSegEvParams(p::SegmentToSegment) = MeanSegToSegEvParams(D1=p.D1, H1=p.H1, D2=p.D2, H2=p.H2, σ=p.σ)
-
-function swap!(a, b)
-    aux = b
-    b = a
-    a = aux
-end
-
 transpose(p::MeanSegToSegEvParams) = MeanSegToSegEvParams(D1=p.D2, H1=p.H2, D2=p.D1, H2=p.H1, σ=p.σ)
 
 function L(r, params::MeanSegToSegEvParams)
