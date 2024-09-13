@@ -25,25 +25,24 @@ function L(r, params::MeanSegToSegEvParams)
     @unpack D1, H1, D2, H2, σ, r1, r2, r3, r4 = params
 
     if r <= r1
-        0.
+        return 0.
     elseif r < r2
-        r * (D1 - D2 + H1) / sqrt(r^2-σ^2) + r
+        return r * (D1 - D2 + H1) / sqrt(r^2-σ^2) + r
     elseif r < r3
-        r * min(H1, H2) / sqrt(r^2-σ^2)
+        return r * min(H1, H2) / sqrt(r^2-σ^2)
     elseif r < r4
-        r * (D2 - D1 + H2) / sqrt(r^2-σ^2) - r
-    else
-        0.
+        return r * (D2 - D1 + H2) / sqrt(r^2-σ^2) - r
+    else 
+        return 0.
     end
 end
 
-function mean_sts_evaluation(params::MeanSegToSegEvParams)
+h_mean_sts(r, p::MeanSegToSegEvParams) = (L(r, p) + L(r, transpose(p))) / p.H2
+function h_mean_lims(params)
     paramsT = transpose(params)
-    f(r) = L(r, params) + L(r, paramsT)
-    h_mean_sts(r) = f(r) / params.H2
     r_min = Base.max(params.r1, paramsT.r1)
     r_max = Base.max(params.r4, paramsT.r4)
-    return h_mean_sts, r_min, r_max
+    r_min, r_max
 end
 
 function compute_double_integral_sts(s::SegmentToSegment, f::Function)

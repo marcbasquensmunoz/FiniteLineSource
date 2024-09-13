@@ -1,9 +1,9 @@
-struct SegmentToSegment <: Setup
-    D1
-    H1
-    D2
-    H2
-    σ
+struct SegmentToSegment{T <: Number} <: Setup
+    D1::T
+    H1::T
+    D2::T
+    H2::T
+    σ::T
 end
 function SegmentToSegment(;D1, H1, D2, H2, σ)
     lowest = min(min(D1, D1+H1), min(D2, D2+H2))
@@ -17,18 +17,25 @@ function SegmentToSegment(;D1, H1, D2, H2, σ)
     end
 end
 
-function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp, P = nothing, M = nothing)
+struct STSComputationContainers{T <: Number} <: ComputationContainers
+    P::Matrix{T}
+    M::Vector{T}
+end
+STSComputationContainers(n) = STSComputationContainers(zeros(n+1, n+1), zeros(n+1))
+
+function initialize_containers(::SegmentToSegment, dps)
+    N = map(dp -> dp.n, dps)
+    unique_n = unique(N)
+    map_n = [findall(x -> x==n, unique_n)[1] for n in N]
+    (map(n -> STSComputationContainers(n), unique_n), map_n)
+end
+
+function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
+    @unpack P, M = containers
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
-
-    if isnothing(P)
-        P = zeros(n+1, n+1)
-    end
-    if isnothing(M)
-        M = zeros(n+1)
-    end
 
     for k in 0:n
         for s in 1:n+1
@@ -37,14 +44,15 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp,
     end
 
     params = MeanSegToSegEvParams(setup)
-    h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
-    guide(r) = h_mean_sts(r*rb) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)
-    R̃, wz = adaptive_gk(guide, r_min/rb, r_max/rb)
+    r_min, r_max = h_mean_lims(params) 
+    guide(r, rb, params) = h_mean_sts(r*rb, params) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)
+    R̃, wz = adaptive_gk(r -> guide(r, rb, params), r_min/rb, r_max/rb)
 
-    f(r̃, k) = h_mean_sts(r̃*rb) * rb * besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
+    f(r̃, k, rb, m, c) = h_mean_sts(r̃*rb, params) * rb * besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
 
-    for k in 0:n
-        M[k+1] = dot(f.(R̃, k), wz)
+
+    @inbounds for k in 0:n
+        M[k+1] = dot(f.(R̃, k, rb, m, c), wz)
     end
 
     M .= P * M 
