@@ -39,7 +39,7 @@ function precompute_z_weights(setup::MovingSegmentToPoint; params::Constants)
     return (R=R, wz=wz)
 end
 
-function precompute_coefficients(setup::MovingSegmentToPoint; dp, params::Constants)
+function precompute_coefficients(setup::MovingSegmentToPoint; dp, params::Constants, containers::ComputationContainers)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg, α = params
     @unpack x, v = setup

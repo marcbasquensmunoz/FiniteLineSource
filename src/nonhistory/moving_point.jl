@@ -43,7 +43,7 @@ function f_guess(setup::MovingPointToPoint, params::Constants)
     f
 end
 
-function precompute_coefficients(setup::MovingPointToPoint; dp, params::Constants)
+function precompute_coefficients(setup::MovingPointToPoint; dp, params::Constants, containers::ComputationContainers)
     @unpack m, c, n, xt, w = dp
     @unpack r, σ, x, v = setup
     @unpack rb, kg, α, Δt = params

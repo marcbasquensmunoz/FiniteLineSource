@@ -24,7 +24,7 @@ function precompute_z_weights(setup::SegmentToPoint; params::Constants)
     return (R=R, wz=wz)
 end
 
-function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp)
+function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, containers::ComputationContainers)
     @unpack m, c, n, xt, w = dp
     @unpack D, H, z = setup
     @unpack rb, kg = params

@@ -44,10 +44,3 @@ function h_mean_lims(params)
     r_max = Base.max(params.r4, paramsT.r4)
     return r_min, r_max
 end
-
-function compute_double_integral_sts(s::SegmentToSegment, f::Function)
-    params = MeanSegToSegEvParams(s)
-    h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
-    x, w = adaptive_gk(f, r_min, r_max)
-    dot(f.(x), w)
-end
