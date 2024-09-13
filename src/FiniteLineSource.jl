@@ -1,6 +1,5 @@
 module FiniteLineSource
 
-export BoreholeSegment, segment_to_segment_step_response, T_ls
 export point_step_response
 export precompute_parameters, fevolve_through_history!, compute_integral_and_advance_one_step!, compute_integral_throught_history!
 
@@ -13,27 +12,24 @@ using FastGaussQuadrature
 using LegendrePolynomials
 using DSP
 
-include("BoreholeSegment.jl")
-include("segment_response.jl")
-include("segment_T_field.jl")
-
-
-include("bakhalov.jl")
-include("point_to_point.jl")
-include("segment_to_point.jl")
-include("segment_to_segment.jl")
-include("segment_to_segment_old.jl")
-include("moving_point.jl")
-include("moving_segment.jl")
+include("nonhistory/interface.jl")
+include("nonhistory/objects.jl")
+include("nonhistory/bakhalov.jl")
+include("nonhistory/point_to_point.jl")
+include("nonhistory/segment_to_point.jl")
+include("nonhistory/segment_to_segment.jl")
+include("nonhistory/segment_to_segment_old.jl")
+include("nonhistory/moving_point.jl")
+include("nonhistory/moving_segment.jl")
 include("convolution.jl")
 export PointToPoint, SegmentToPoint, SegmentToSegment, SegmentToSegmentOld, MovingPointToPoint, MovingSegmentToPoint
 export convolve_step, step_response
 export Constants, Preallocation
 export precompute_parameters, compute_integral_throught_history!
 
-include("mean_sts.jl")
-include("midpoint.jl")
-include("mean_internal.jl")
+include("approximations/mean_sts.jl")
+include("approximations/midpoint.jl")
+include("approximations/mean_internal.jl")
 export mean_sts_evaluation, midpoint_evaluation, mean_internal_evaluation
 export MeanSegToSegEvParams, MidPointParams, InternalSegToSegEvParams
 
@@ -44,7 +40,7 @@ export IntegrationSegment
 include("self_response.jl")
 export compute_self_response
 
-include("continuous.jl")
+include("continuous/continuous.jl")
 export compute_coefficients_through_history, precompute_matrices, legendre_coeffs
 
 end

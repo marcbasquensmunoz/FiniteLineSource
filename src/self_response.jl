@@ -21,3 +21,11 @@ function integrate(f, a, b, x, w)
     c = (b+a)/2
     m * dot(w, @. f(m*x+c))
 end
+
+function compute_sts_response(s:: SegmentToSegment, params::Constants)
+    params = MeanSegToSegEvParams(s)
+    h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
+    f(r) = h_mean_sts(r) * point_step_response(t, r, α, kg)
+    x, w = adaptive_gk(f, r_min, r_max)
+    dot(f.(x), w)
+end
