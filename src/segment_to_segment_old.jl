@@ -23,7 +23,7 @@ function precompute_z_weights(setup::SegmentToSegmentOld; params::Constants)
     return (R̃=R̃, w=w, J=J1*J2/H2)
 end
 
-function precompute_coefficients(setup::SegmentToSegmentOld; params::Constants, dp::DiscretizationParameters, containers::ComputationContainers)
+function precompute_coefficients(setup::SegmentToSegmentOld; params::Constants, dp)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
 

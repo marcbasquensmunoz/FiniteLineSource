@@ -3,7 +3,7 @@
     r
 end
 
-function precompute_coefficients(setup::PointToPoint; params::Constants, dp::DiscretizationParameters, containers::ComputationContainers)
+function precompute_coefficients(setup::PointToPoint; dp, params::Constants)
     @unpack m, c, n, xt, w = dp
     @unpack r = setup
     @unpack rb, kg = params
