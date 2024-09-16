@@ -1,3 +1,5 @@
+import Bessels: besselj!
+
 struct SegmentToSegment{T <: Number} <: Setup
     D1::T
     H1::T
@@ -20,8 +22,9 @@ end
 struct STSComputationContainers{T <: Number} <: ComputationContainers
     P::Matrix{T}
     M::Vector{T}
+    aux::Vector{T}
 end
-STSComputationContainers(n) = STSComputationContainers(zeros(n+1, n+1), zeros(n+1))
+STSComputationContainers(n) = STSComputationContainers(zeros(n+1, n+1), zeros(n+1), zeros(n+1))
 
 function initialize_containers(::SegmentToSegment, dps)
     N = map(dp -> dp.n, dps)
@@ -33,7 +36,7 @@ end
 function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
-    @unpack P, M = containers
+    @unpack P, M, aux = containers
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
@@ -43,20 +46,31 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp:
         end
     end
 
-    params = MeanSegToSegEvParams(setup)
-    r_min, r_max = h_mean_lims(params) 
-    guide(r, rb, params) = h_mean_sts(r*rb, params) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)
-    R̃, wz = adaptive_gk(r -> guide(r, rb, params), r_min/rb, r_max/rb)
+    sts_params = MeanSegToSegEvParams(setup)
+    r_min, r_max = h_mean_lims(sts_params) 
+    h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
+    guide(r) = h_sts(r) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)
+    R̃, wz = adaptive_gk(guide, r_min/rb, r_max/rb)
 
-    f(r̃, k, rb, m, c) = h_mean_sts(r̃*rb, params) * rb * besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
-
-
-    @inbounds for k in 0:n
-        M[k+1] = dot(f.(R̃, k, rb, m, c), wz)
+    function f(r̃, N, rb, m, c, out)
+        K = 0:N
+        besselj!(out, K .+ 1/2, m * r̃)
+        @. out *= h_sts(r̃) * rb * imag((im)^K * exp(im*c*r̃)) / r̃^(3/2)
     end
 
-    M .= P * M 
-    return C .* M
+    J = zeros(n+1, length(R̃))
+
+    for (i, r̃) in enumerate(R̃)
+        f(r̃, n, rb, m, c, aux)
+        @. J[:, i] = aux
+    end
+
+    for k in 0:n
+        @views M[k+1] = dot(J[k+1, :], wz)
+    end
+
+    mul!(aux, P, M)
+    return C .* aux
 end
 
 function constant_integral(setup::SegmentToSegment; params::Constants)
@@ -83,3 +97,4 @@ function has_heatwave_arrived(setup::SegmentToSegment; params::Constants, t)
 
     d2 / (2α*t) < threshold^2
 end
+

@@ -1,8 +1,9 @@
 using FiniteLineSource
-using FiniteLineSource: adaptive_gk
+using FiniteLineSource: adaptive_gk, h_mean_lims, h_mean_sts
 using QuadGK
 using SpecialFunctions
 using Cubature
+using LinearAlgebra
 
 
 function test_classical(;t, rb, H, α, kg)
@@ -19,8 +20,8 @@ end
 
 function adaptive(;t, rb, H, α, kg)
     params = MeanSegToSegEvParams(D1=0., H1=H, D2=0., H2=H, σ=rb)
-    h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
-    f(r) = h_mean_sts(r) * point_step_response(t, r, α, kg)
+    r_min, r_max = h_mean_lims(params)
+    f(r) = h_mean_sts(r, params) * point_step_response(t, r, α, kg)
     x, w = adaptive_gk(f, r_min, r_max)
     dot(f.(x), w)
 end
@@ -28,7 +29,7 @@ end
 # Example of computation of self response
 t = 3600.
 rb = 0.1
-H = 10.
+H = 100.
 α = 10^-6
 kg = 3.
 
@@ -39,7 +40,7 @@ kg = 3.
 @btime test_respresentative(t=t, rb=rb, H=H, α=α, kg=kg)
 
 # Integrating directly the double integral
-@btime hcubature(z -> point_step_response(t, sqrt(rb^2 + (z[1]-z[2])^2), α, kg) / H, [0., 0.], [H, H])
+#@btime hcubature(z -> point_step_response(t, sqrt(rb^2 + (z[1]-z[2])^2), α, kg) / H, [0., 0.], [H, H])
 @btime quadgk(z -> quadgk(zp -> point_step_response(t, sqrt(rb^2 + (z-zp)^2), α, kg) / H, 0., H)[1], 0., H)
 
 # Or with the classical formula
@@ -47,3 +48,6 @@ kg = 3.
 
 # Adaptive discretization
 @btime adaptive(t=t, rb=rb, H=H, α=α, kg=kg)
+
+
+#### THIS DOESNT WORK WITH BIG H

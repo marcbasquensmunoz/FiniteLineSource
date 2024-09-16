@@ -34,6 +34,6 @@ function DiscretizationParameters(a, b, n::Int)
     DiscretizationParameters(xt=xt, w=w, x=x, m=m, c=c, n=n)
 end
 
-struct EmptyContainer end
+struct EmptyContainer <: ComputationContainers end
 
 initialize_containers(::Setup, dps) = ([EmptyContainer()], ones(Int64, length(dps)))

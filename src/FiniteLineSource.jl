@@ -4,13 +4,13 @@ export point_step_response
 export precompute_parameters, fevolve_through_history!, compute_integral_and_advance_one_step!, compute_integral_throught_history!
 
 using Parameters
-using SpecialFunctions
 using QuadGK
 using LinearAlgebra
 using Cubature
 using FastGaussQuadrature
 using LegendrePolynomials
 using DSP
+using Bessels
 
 include("nonhistory/interface.jl")
 include("nonhistory/objects.jl")

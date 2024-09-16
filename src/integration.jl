@@ -89,7 +89,7 @@ function rescale!(a, b, x, w, X, W)
 end
 
 function evalrule(f, a::T, b::T, x::Vector{T}, w::Vector{S}, gw::Vector{S}) where {T <: Number, S <: Number}
-    s = (b-a) * convert(eltype(a), 0.5)
+    s = (b-a) * convert(typeof(a), 0.5)
     
     Fg = @views @. f(a + (1+x[2:2:end])*s) + f(a + (1-x[2:2:end])*s)
     Fk = @views @. f(a + (1+x[1:2:end-1])*s) + f(a + (1-x[1:2:end-1])*s)
