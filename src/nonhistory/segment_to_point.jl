@@ -16,7 +16,7 @@ function precompute_z_weights(setup::SegmentToPoint; params::Constants)
     limits = line_limits .* H .+ D
 
     for (a, b, n) in zip(limits[1:end-1], limits[2:end], line_points) 
-        @unpack x, m, w = discretization_parameters(a, b, n)
+        @unpack x, m, w = DiscretizationParameters(a, b, n)
         append!(R, @. sqrt(σ^2 + (z - x)^2) / rb)
         append!(wz, m .* w)
     end

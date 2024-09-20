@@ -11,6 +11,7 @@ using FastGaussQuadrature
 using LegendrePolynomials
 using DSP
 using Bessels
+using StaticArrays
 
 include("nonhistory/interface.jl")
 include("nonhistory/objects.jl")
