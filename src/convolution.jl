@@ -38,8 +38,8 @@ function step_response(t, model::SegmentToSegment, params::Constants)
     @unpack σ, D1, H1, D2, H2 = model
     @unpack α, kg = params
     params = MeanSegToSegEvParams(model)
-    h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
-    quadgk(r -> h_mean_sts(r) * point_step_response(t, r, α, kg), r_min, r_max)[1]
+    r_min, r_max = h_mean_lims(params)
+    quadgk(r -> h_mean_sts(r, params) * point_step_response(t, r, α, kg), r_min, r_max)[1]
 end
 
 function step_response(t, model::SegmentToSegmentOld, params::Constants)

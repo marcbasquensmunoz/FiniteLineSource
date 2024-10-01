@@ -1,5 +1,5 @@
 using FiniteLineSource
-using FiniteLineSource: adaptive_gk, h_mean_lims, h_mean_sts
+using FiniteLineSource: adaptive_gk, h_mean_lims, h_mean_sts, adaptive_nodes_and_weights
 using QuadGK
 using SpecialFunctions
 using Cubature
@@ -14,8 +14,8 @@ end
 
 function test_respresentative(;t, rb, H, α, kg)
     params = MeanSegToSegEvParams(D1=0., H1=H, D2=0., H2=H, σ=rb)
-    h_mean_sts, r_min, r_max = mean_sts_evaluation(params)
-    quadgk(r -> h_mean_sts(r) * point_step_response(t, r, α, kg), r_min, r_max)
+    r_min, r_max = h_mean_lims(params)
+    quadgk(r -> h_mean_sts(r, params) * point_step_response(t, r, α, kg), r_min, r_max)
 end
 
 function adaptive(;t, rb, H, α, kg)
@@ -23,6 +23,14 @@ function adaptive(;t, rb, H, α, kg)
     r_min, r_max = h_mean_lims(params)
     f(r) = h_mean_sts(r, params) * point_step_response(t, r, α, kg)
     x, w = adaptive_gk(f, r_min, r_max)
+    dot(f.(x), w)
+end
+
+function adaptive_2(;t, rb, H, α, kg)
+    params = MeanSegToSegEvParams(D1=0., H1=H, D2=0., H2=H, σ=rb)
+    r_min, r_max = h_mean_lims(params)
+    f(r) = h_mean_sts(r, params) * point_step_response(t, r, α, kg)
+    x, w = adaptive_nodes_and_weights(f, r_min, r_max)
     dot(f.(x), w)
 end
 
@@ -34,20 +42,21 @@ H = 100.
 kg = 3.
 
 # Using method
-@btime compute_self_response(300, t=t, rb=rb, H=H, α=α, kg=kg)
+@time compute_self_response(300, t=t, rb=rb, H=H, α=α, kg=kg)
 
 # Integrating directly with representative h
-@btime test_respresentative(t=t, rb=rb, H=H, α=α, kg=kg)
+@time test_respresentative(t=t, rb=rb, H=H, α=α, kg=kg)
 
 # Integrating directly the double integral
 #@btime hcubature(z -> point_step_response(t, sqrt(rb^2 + (z[1]-z[2])^2), α, kg) / H, [0., 0.], [H, H])
-@btime quadgk(z -> quadgk(zp -> point_step_response(t, sqrt(rb^2 + (z-zp)^2), α, kg) / H, 0., H)[1], 0., H)
+@time quadgk(z -> quadgk(zp -> point_step_response(t, sqrt(rb^2 + (z-zp)^2), α, kg) / H, 0., H)[1], 0., H)
 
 # Or with the classical formula
-@btime test_classical(t=t, rb=rb, H=H, α=α, kg=kg)
+@time test_classical(t=t, rb=rb, H=H, α=α, kg=kg)
 
 # Adaptive discretization
-@btime adaptive(t=t, rb=rb, H=H, α=α, kg=kg)
+@time adaptive(t=t, rb=rb, H=H, α=α, kg=kg)
+@time adaptive_2(t=t, rb=rb, H=H, α=α, kg=kg)
 
 
 #### THIS DOESNT WORK WITH BIG H

@@ -1,5 +1,6 @@
 import Bessels: besselj!
 import .FiniteLineSource: DiscretizationParameters
+import .Bessels: besselj
 
 struct SegmentToSegment{T <: Number} <: Setup
     D1::T
@@ -24,9 +25,9 @@ struct STSComputationContainers{T <: Number} <: ComputationContainers
     P::Matrix{T}
     M::Vector{T}
     aux::Vector{T}
-    rule::Tuple{Vector{T}, Vector{T}, Vector{T}}
+    segment_buffer::Union{Vector{QuadGK.Segment{T, T, T}}, Nothing}
 end
-STSComputationContainers(n) = STSComputationContainers(zeros(n+1, n+1), zeros(n+1), zeros(n+1), QuadGK.kronrod(8))
+STSComputationContainers(n) = STSComputationContainers(zeros(n+1, n+1), zeros(n+1), zeros(n+1), nothing)
 
 function initialize_containers(::SegmentToSegment, dps)
     N = map(dp -> dp.n, dps)
@@ -38,7 +39,7 @@ end
 function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
-    @unpack P, M, aux, rule = containers
+    @unpack P, M, aux, segment_buffer = containers
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
@@ -52,7 +53,7 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp:
     r_min, r_max = h_mean_lims(sts_params) 
     h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
     guide(r) = h_sts(r) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)    
-    R̃, wz = adaptive_gk(guide, r_min/rb, r_max/rb, rule=rule, rtol=1e-6)
+    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, buffer = segment_buffer)
 
     function f(r̃, N, rb, m, c, out)
         K = 0:N

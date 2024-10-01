@@ -6,8 +6,11 @@ f_evolve_2!(::Setup, fx, x, q, params::Constants)     = @. fx = fx + q / x
 function f_guess(::Setup, params::Constants) 
     @unpack Δt, α, rb = params
     Δt̃ = α*Δt/rb^2
-    T = [1, 24*7, 24*365, 24*365*20]
-    w = 10 .^ collect(0:length(T)-1)
+    T = @SVector [1, 24*7, 24*365, 24*365*20]
+    w = @MVector zeros(length(T))
+    for i in 0:(length(T)-1)
+        w[i+1] = 10 ^ i
+    end
     f(z) = sum(w .* exp.(-T*z^2*Δt̃)) * (1 - exp(-z^2*Δt̃)) / z
     f
 end
@@ -35,7 +38,7 @@ function precompute_parameters(setup::Setup; params::Constants, n = 20, n_tot = 
     @unpack Δt, b = params
     type = gettype(setup)
 
-    segments = adaptive_gk_segments(f_guess(setup, params), convert(type, 0.), convert(type, b))
+    _, _, segments = quadgk_segbuf(f_guess(setup, params), convert(type, 0.), convert(type, b))
     dps = @views [DiscretizationParameters(s.a, s.b, n) for s in segments]
     containers, map = initialize_containers(setup, dps)    
     x  = reduce(vcat, (dp.x for dp in dps))

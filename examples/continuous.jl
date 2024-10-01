@@ -122,7 +122,7 @@ A = @. exp(-Δt̃ * ζ^2)
 B = @. -exp(-Δt̃ * ζ^2) / ζ
 C = @. 1/ζ
 
-RR = @time R_matrix(geometry, n=n, N=N, m=m, c=c, rb=rb, xN=100)
+R = @time R_matrix(geometry, n=n, N=N, m=m, c=c, rb=rb, xN=100)
 P = P_matrix(n=n, m=m)
 RP = reshape(reshape(R, (N+1)^2, n+1)*P, N+1, N+1, n+1)
 D = D_matrix(geometry, N=N, xN=100)
@@ -187,8 +187,11 @@ end
 
 
 
+
+#### Real example
+
 n = 100
-K = 10
+K = 100
 nk = 100
 T = 1
 
@@ -200,8 +203,13 @@ Q = ones(K+1)
 qk = legendre_coeffs(Q, X, W)
 
 precomp = precompute_matrices(geometry, params, n=n, K=K, nk=nk)
-compute_coefficients_through_history(Tkk, qk, params, precomp)
+@time compute_coefficients_through_history(Tkk, qk, params, precomp)
 
-zzz = D2:0.01:D2+H2
-plot(zzz, full_function(Tkk[:, 1], zzz, a=D2, b=D2+H2))
+zzz = D2:0.001:D2+H2
+ff = full_function(Tkk[:, 1], zzz, a=D2, b=D2+H2)
+plot(zzz, ff)
 plot!(zzz, test.(zzz))
+
+error = ff - test.(zzz)
+@show sum(abs.(error))
+plot(error)

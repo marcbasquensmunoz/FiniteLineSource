@@ -12,6 +12,7 @@ using LegendrePolynomials
 using DSP
 using Bessels
 using StaticArrays
+using SpecialFunctions
 
 include("nonhistory/interface.jl")
 include("nonhistory/objects.jl")
