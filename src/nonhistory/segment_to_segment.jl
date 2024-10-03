@@ -33,13 +33,22 @@ function initialize_containers(::SegmentToSegment, dps)
     N = map(dp -> dp.n, dps)
     unique_n = unique(N)
     map_n = [findall(x -> x==n, unique_n)[1] for n in N]
-    (map(n -> STSComputationContainers(n), unique_n), map_n)
+    (map_n, map(n -> STSComputationContainers(n), unique_n))
 end
 
-function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers)
+function initialize_buffer(setup::SegmentToSegment, rb)
+    sts_params = MeanSegToSegEvParams(setup)
+    r_min, r_max = h_mean_lims(sts_params) 
+    h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
+    guide(r) = h_sts(r) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)  
+    _,_, buffer = quadgk_segbuf(guide, r_min/rb, r_max/rb, order = 20)
+    return buffer
+end
+
+function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers, buffer=nothing)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
-    @unpack P, M, aux, segment_buffer = containers
+    @unpack P, M, aux = containers
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
@@ -52,8 +61,8 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp:
     sts_params = MeanSegToSegEvParams(setup)
     r_min, r_max = h_mean_lims(sts_params) 
     h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
-    guide(r) = h_sts(r) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)    
-    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, buffer = segment_buffer)
+    guide(r) = h_sts(r) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)  
+    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer)
 
     function f(r̃, N, rb, m, c, out)
         K = 0:N
