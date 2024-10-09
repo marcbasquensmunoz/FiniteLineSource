@@ -32,7 +32,7 @@ STSComputationContainers(n) = STSComputationContainers(zeros(n+1, n+1), zeros(n+
 function initialize_containers(::SegmentToSegment, dps)
     N = map(dp -> dp.n, dps)
     unique_n = unique(N)
-    map_n = [findall(x -> x==n, unique_n)[1] for n in N]
+    map_n = [findfirst(x -> x==n, unique_n) for n in N]
     (map_n, map(n -> STSComputationContainers(n), unique_n))
 end
 
@@ -61,7 +61,7 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp:
     sts_params = MeanSegToSegEvParams(setup)
     r_min, r_max = h_mean_lims(sts_params) 
     h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
-    guide(r) = h_sts(r) * besselj(1/2, r) * imag(exp(im*r)) / r^(3/2)  
+    guide(r̃) = h_sts(r̃) * besselj(1/2, r̃) * imag(exp(im*r̃)) / r̃^(3/2)  
     R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer)
 
     function f(r̃, N, rb, m, c, out)

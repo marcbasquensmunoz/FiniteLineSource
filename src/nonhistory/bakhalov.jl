@@ -40,7 +40,7 @@ function precompute_parameters(setup::Setup; params::Constants, n = 20, n_tot = 
 
     _, _, segments = quadgk_segbuf(f_guess(setup, params), convert(type, 0.), convert(type, b))
     dps = @views [DiscretizationParameters(s.a, s.b, n) for s in segments]
-    containers, map = initialize_containers(setup, dps)    
+    map, containers = initialize_containers(setup, dps)    
     x  = reduce(vcat, (dp.x for dp in dps))
     w  = reduce(vcat, [precompute_coefficients(setup, dp=dp, params=params, containers=containers[map[i]]) for (i, dp) in enumerate(dps)])
     fx = zeros(type, sum([dp.n+1 for dp in dps]))

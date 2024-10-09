@@ -30,10 +30,10 @@ export Constants, Preallocation
 export precompute_parameters, compute_integral_throught_history!
 
 include("approximations/mean_sts.jl")
-include("approximations/midpoint.jl")
+include("approximations/point.jl")
 include("approximations/mean_internal.jl")
 export mean_sts_evaluation, midpoint_evaluation, mean_internal_evaluation
-export MeanSegToSegEvParams, MidPointParams, InternalSegToSegEvParams
+export MeanSegToSegEvParams, PointEvalParams, InternalSegToSegEvParams
 
 include("integration.jl")
 export integrate
