@@ -47,7 +47,7 @@ function precompute_z_weights(setup::SegmentToPoint; params::Constants)
 end
 
 
-function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, containers::ComputationContainers, buffer=nothing)
+function precompute_coefficients1(setup::SegmentToPoint; params::Constants, dp, containers::ComputationContainers, buffer=nothing)
     @unpack m, c, n, xt, w = dp
     @unpack D, H, z, σ = setup
     @unpack rb, kg = params
@@ -79,12 +79,10 @@ function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, c
 end
 
 
-function precompute_coefficients1(setup::SegmentToPoint; params::Constants, dp, containers::ComputationContainers, buffer=nothing)
+function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, containers::ComputationContainers, buffer=nothing)
     @unpack m, c, n, xt, w = dp
     @unpack D, H, z, σ = setup
     @unpack rb, kg = params
-
-    #R̃, wz = precompute_z_weights(setup, params=params)
 
     stp_params = PointEvalParams(setup)
     r_min, r_max = h_point_lims(stp_params) 
