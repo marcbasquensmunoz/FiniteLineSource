@@ -18,7 +18,7 @@ PointEvalParams(s::SegmentToPoint) = PointEvalParams(D=s.D, H=s.H, z=s.z, σ=s.�
 
 function h_point(r, params::PointEvalParams)
     @unpack σ, r1, r2, r3 = params
-    if r < r1
+    if r <= r1
         return 0.
     elseif r < r2
         return 2r/sqrt(r^2-σ^2)

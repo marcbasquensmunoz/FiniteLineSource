@@ -4,8 +4,8 @@ q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
 I = zeros(length(q))
 
 #setup = PointToPoint(r=1.)
-setup = SegmentToSegment(D1=0., H1=50., D2=0., H2=50., σ=0.1)
-setup = SegmentToPoint(D=0., H=50., σ=0.1, z=25.)
+setup = SegmentToPoint(D=10., H=100., σ=0.0575, z=60.)
+#setup = SegmentToSegment(D1=0., H1=50., D2=0., H2=50., σ=0.1)
 #setup = SegmentToSegmentOld(D1=5., H1=10., D2=5., H2=10., σ=100.)
 
 #setup = MovingPointToPoint(x=100., σ=0.1, v=.01)
