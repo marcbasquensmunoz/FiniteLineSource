@@ -45,7 +45,7 @@ function initialize_buffer(setup::SegmentToSegment, rb)
     return buffer
 end
 
-function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers, buffer=nothing)
+function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers, buffer=nothing, rtol=sqrt(eps()), atol=0.)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
     @unpack P, M, aux = containers
@@ -62,7 +62,7 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp:
     r_min, r_max = h_mean_lims(sts_params) 
     h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
     guide(r̃) = h_sts(r̃) * besselj(1/2, r̃) * imag(exp(im*r̃)) / r̃^(3/2)  
-    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer)
+    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer, rtol=rtol, atol=atol)
 
     function f(r̃, N, rb, m, c, out)
         K = 0:N

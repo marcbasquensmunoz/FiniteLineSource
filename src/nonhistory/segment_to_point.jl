@@ -79,7 +79,7 @@ function precompute_coefficients1(setup::SegmentToPoint; params::Constants, dp, 
 end
 
 
-function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, containers::ComputationContainers, buffer=nothing)
+function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, containers::ComputationContainers, buffer=nothing, rtol=sqrt(eps()), atol=0.)
     @unpack m, c, n, xt, w = dp
     @unpack D, H, z, σ = setup
     @unpack rb, kg = params
@@ -88,7 +88,7 @@ function precompute_coefficients(setup::SegmentToPoint; params::Constants, dp, c
     r_min, r_max = h_point_lims(stp_params) 
     h_stp(r̃) = h_point(r̃*rb, stp_params)
     guide(r̃) = h_stp(r̃) * besselj(1/2, r̃) * imag(exp(im*r̃)) / r̃^(3/2)  
-    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20)
+    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, rtol=rtol, atol=atol)
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
