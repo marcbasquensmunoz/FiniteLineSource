@@ -22,12 +22,13 @@ function SegmentToSegment(;D1, H1, D2, H2, σ)
 end
 
 struct STSComputationContainers{T <: Number} <: ComputationContainers
+    J::Matrix{T}
     P::Matrix{T}
     M::Vector{T}
     aux::Vector{T}
     segment_buffer::Union{Vector{QuadGK.Segment{T, T, T}}, Nothing}
 end
-STSComputationContainers(n) = STSComputationContainers(zeros(n+1, n+1), zeros(n+1), zeros(n+1), nothing)
+STSComputationContainers(n) = STSComputationContainers(zeros(n+1, 2*n^3), zeros(n+1, n+1), zeros(n+1), zeros(n+1), nothing)
 
 function initialize_containers(::SegmentToSegment, dps)
     N = map(dp -> dp.n, dps)
@@ -48,37 +49,43 @@ end
 function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers, buffer=nothing, rtol=sqrt(eps()), atol=0.)
     @unpack m, c, n, xt, w = dp
     @unpack rb, kg = params
-    @unpack P, M, aux = containers
+    @unpack J, P, M, aux = containers
 
     C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
     for k in 0:n
         for s in 1:n+1
-            P[s, k+1] = (2k+1) * w[s] * Pl(xt[s], k)
+            @inbounds P[s, k+1] = (2k+1) * w[s] * Pl(xt[s], k)
         end
     end
 
     sts_params = MeanSegToSegEvParams(setup)
+    #sts_params_T = transpose(sts_params)
+
     r_min, r_max = h_mean_lims(sts_params) 
+    #h_sts(r̃) = (L(r̃*rb, sts_params) + L(r̃*rb, sts_params_T)) / sts_params.H2 
     h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
     guide(r̃) = h_sts(r̃) * besselj(1/2, r̃) * imag(exp(im*r̃)) / r̃^(3/2)  
     R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer, rtol=rtol, atol=atol)
-
+    
     function f(r̃, N, rb, m, c, out)
-        K = 0:N
-        besselj!(out, K .+ 1/2, m * r̃)
-        @. out *= h_sts(r̃) * rb * imag((im)^K * exp(im*c*r̃)) / r̃^(3/2)
+        besselj!(out, 1/2:(N+1/2), m * r̃)
+        eval = h_sts(r̃) * rb * exp(im*c*r̃) / r̃^(3/2)
+        value = (imag(eval), imag(im*eval), -imag(eval), -imag(im*eval))
+        for k in 0:N
+            @inbounds out[k+1] *= value[(k % 4) + 1]
+        end
     end
-
-    J = zeros(n+1, length(R̃))
-
+    
     for (i, r̃) in enumerate(R̃)
         f(r̃, n, rb, m, c, aux)
-        @. J[:, i] = aux
+        for k in 1:n+1
+            @inbounds J[k, i] = aux[k]
+        end
     end
 
     for k in 0:n
-        @views M[k+1] = dot(J[k+1, :], wz)
+        @inbounds @views M[k+1] = dot(J[k+1, 1:length(wz)], wz)
     end
 
     mul!(aux, P, M)
