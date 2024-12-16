@@ -7,7 +7,7 @@ function produce_plot_fls(σ, line_points, plot)
     q = [20*sin(2π*i/8760) + 5*sin(2π*i/24) + 5. for i=1:8760*20]
     I = zeros(length(q))
 
-    setup = SegmentToPoint(D=0., H=10., σ=σ, z=5.)
+    setup = SegmentToPoint(D=0., H=100., σ=σ, z=50.)
     params = Constants(Δt = 3600., line_points=line_points, line_limits=[0., 0.5, 1.])#[0., 0.3, 0.5, 0.7, 1.])
 
     precomp = precompute_parameters(setup, params=params)
@@ -26,9 +26,9 @@ end
 ####
 
 rs = [0.1, 1, 10, 100]
-points = [1, 2, 3, 4, 6]
+points = [1, 4, 8, 16, 40]
 #discretization = [20, 30, 30, 20]
-discretization = [10, 10]
+discretization = [5, 5]
 ff = Figure(size = (1000,1000))
 grid = ff[1, 1] = GridLayout()
 axis = Matrix{Axis}(undef, length(rs), length(points))
@@ -41,6 +41,9 @@ for (i, r) in enumerate(rs)
         axis[i, j] = Axis(grid[i, j], limits=(xlimits, limits), ylabel=j==1 ? L"\mathbf{\tilde{\sigma}=%$(Int(r/0.1))}" : "", ylabelrotation = 0)
         real_points = produce_plot_fls(r, p .* discretization, axis[i, j])    
         axis[i, j].title = i==1 ? L"\mathbf{\sum N = %$(Int(p * sum(discretization) + length(discretization)))}" : ""
+        if i == 4 && j == 3
+            axis[i, j].xlabel = "Density of the error "
+        end
     end     
 end
 for i in 1:length(rs)-1

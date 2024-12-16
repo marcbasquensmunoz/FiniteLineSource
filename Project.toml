@@ -15,6 +15,7 @@ Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+TaylorDiff = "b36ab563-344f-407b-a36a-4f200bebf99c"
 
 [compat]
 Aqua = "~0.8"

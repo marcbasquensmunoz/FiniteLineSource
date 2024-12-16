@@ -1,6 +1,5 @@
 import Bessels: besselj!
 import .FiniteLineSource: DiscretizationParameters
-import .Bessels: besselj
 
 struct SegmentToSegment{T <: Number} <: Setup
     D1::T
@@ -67,11 +66,11 @@ function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp:
     h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
     guide(r̃) = h_sts(r̃) * besselj(1/2, r̃) * imag(exp(im*r̃)) / r̃^(3/2)  
     R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer, rtol=rtol, atol=atol)
-    
+    @show length(R̃), n
     function f(r̃, N, rb, m, c, out)
         besselj!(out, 1/2:(N+1/2), m * r̃)
         eval = h_sts(r̃) * rb * exp(im*c*r̃) / r̃^(3/2)
-        value = (imag(eval), imag(im*eval), -imag(eval), -imag(im*eval))
+        value = (imag(eval), real(eval), -imag(eval), -real(eval))
         for k in 0:N
             @inbounds out[k+1] *= value[(k % 4) + 1]
         end

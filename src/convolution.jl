@@ -30,21 +30,33 @@ end
 function step_response(t, model::SegmentToPoint, params::Constants)
     @unpack σ, D, H, z = model
     @unpack α, kg = params
-    quadgk(ζ -> point_step_response(t, sqrt(σ^2 + (z-ζ)^2), α, kg), D, D+H)[1]
+
+    I_stp(s) = erf(s * (z-D)) - erf(s * (z-D-H))
+    1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * I_stp(s), 1/sqrt(4*α*t), Inf, atol = eps())[1]
+
+#    quadgk(ζ -> point_step_response(t, sqrt(σ^2 + (z-ζ)^2), α, kg), D, D+H, atol=eps())[1]
 end
 
 # Mean segment to segment
 function step_response(t, model::SegmentToSegment, params::Constants)
     @unpack σ, D1, H1, D2, H2 = model
-    @unpack α, kg = params
+    @unpack α, kg, rb = params
     params = MeanSegToSegEvParams(model)
     r_min, r_max = h_mean_lims(params)
-    quadgk(r -> h_mean_sts(r, params) * point_step_response(t, r, α, kg), r_min, r_max)[1]
+    quadgk(r -> h_mean_sts(r, params) * point_step_response(t, r, α, kg), r_min, r_max, atol=eps())[1]
 end
 
 function step_response(t, model::SegmentToSegmentOld, params::Constants)
-    step_response(t, SegmentToSegment(model), params)
-end
+    @unpack σ, D1, H1, D2, H2 = model
+    @unpack α, kg = params
+
+    I(s) = ierf((D2 - D1 + H2)*s) + ierf((D2 - D1 - H1)*s) - ierf((D2 - D1)*s) - ierf((D2 - D1 + H2 - H1)*s) 
+    return 1/(4π*kg) * quadgk(s -> exp(-σ^2 * s^2) / s^2 * I(s), 1/sqrt(4α*t), Inf, atol=eps())[1]
+
+    #hcubature(z -> point_step_response(t, sqrt(σ^2 + (z[1]-z[2])^2), α, kg), [D1, D2], [D1+H1, D2+H2], abstol=1e-10)[1]
+    atol = eps()
+    quadgk(z1 -> quadgk(z2 -> point_step_response(t, sqrt(σ^2 + (z1-z2)^2), α, kg), D2, D2+H2, atol=atol)[1], D1, D1+H1, atol=atol)[1]
+end 
 
 # Moving point source
 function step_response(t, model::MovingPointToPoint, params::Constants)
@@ -68,3 +80,5 @@ function step_response(t, model::MovingSegmentToPoint, params::Constants)
     end
     quadgk(ζ -> f(ζ), D, D+H)[1]
 end
+
+ierf(x) = x*erf(x) - (1 - exp(-x^2)) / sqrt(π)

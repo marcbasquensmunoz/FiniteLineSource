@@ -44,6 +44,9 @@ for (i, r) in enumerate(rs)
         axis[i, j] = Axis(grid[i, j], limits=(xlimits, limits), ylabel=j==1 ? L"\mathbf{\tilde{r}=%$(Int(r/0.1))}" : "", ylabelrotation = 0)
         real_points = produce_plot(r, p, axis[i, j])    
         axis[i, j].title = i==1 ? L"\mathbf{\sum n = %$(real_points)}" : ""
+        if i == 4 && j == 3
+             axis[i, j].xlabel = "Density of the error "
+        end
     end     
 end
 for i in 1:length(rs)-1
