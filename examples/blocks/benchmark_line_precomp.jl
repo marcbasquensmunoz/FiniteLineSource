@@ -6,13 +6,14 @@ using HMatrices
 using DataStructures
 using QuadGK
 using SpecialFunctions
+using Parameters
 
-ϵ = 1e-8
+ϵ = 1e-6
 Δt = 3600.
 Nt = 24*8760
 
-bn = 2
-bm = 2
+bn = 10
+bm = 10
 
 α = 1e-6
 kg = 3.
@@ -31,7 +32,11 @@ bh_positions = [(B*(i-1)^2, B*(j-1)^2) for i in 1:bn for j in 1:bm]
 compute_distance(x, y) = sqrt((x[1] - y[1])^2 + (x[2] - y[2])^2)
 
 params = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
-function prepare_containers(bh_positions)
+
+function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
+    @unpack Δt, α, rb = params
+    Δt̃ = Δt*α/rb^2
+
     # Evaluation points 
     # DO NOT USE FOR SELF-RESPONSE
     R = filter!(e -> e != 0, [compute_distance(i, j) for i in bh_positions for j in bh_positions])
@@ -74,42 +79,37 @@ function prepare_containers(bh_positions)
     X, _, Fx, PP, XT = create_bin_containers(bins)
 
     #=
-    for i in eachindex(ζ)
-        for ζζ in ζ[i]
-    
-            K = KernelMatrix{Function, Vector{Tuple{Float64, Float64}}, Vector{Tuple{Float64, Float64}}, Float64}(bh_positions, bh_positions) do x, y
-                if x == y return 1. end
-                setup = SegmentToPoint(D=D, H=H, z=z_eval, σ=sqrt((x[1]-y[1])^2 + (x[2]-y[2])^2))
-                lineparams = LineKernelParams(setup, ζζ/rb, ϵ, eval)
-    
-                bin1 = FiniteLineSource.get_bin(lineparams.n1, bins)
-                bin2 = FiniteLineSource.get_bin(lineparams.n2, bins)
-    
-                compute_kernel_line(lineparams; x1=X[bin1], x2=X[bin2], X1=XT[bin1], X2=XT[bin2], P1=PP[bin1], P2=PP[bin2], f1=Fx[bin1], f2=Fx[bin2])
-            end
-        
-            mat = assemble_hmatrix(K, atol=ϵ)
-        end
-    end
-    =#
     function G(x, y, k)
         if x == y return 1. end
-        setup = SegmentToPoint(D=D, H=H, z=z_eval, σ=sqrt((x[1]-y[1])^2 + (x[2]-y[2])^2))
+        σ = sqrt((x[1]-y[1])^2 + (x[2]-y[2])^2)
+        setup = SegmentToPoint(D=D, H=H, z=z_eval, σ=σ)
         lineparams = LineKernelParams(setup, k/rb, ϵ, eval)
         bin1 = FiniteLineSource.get_bin(lineparams.n1, bins)
         bin2 = FiniteLineSource.get_bin(lineparams.n2, bins)
         compute_kernel_line(lineparams; x1=X[bin1], x2=X[bin2], X1=XT[bin1], X2=XT[bin2], P1=PP[bin1], P2=PP[bin2], f1=Fx[bin1], f2=Fx[bin2])
+    end=#
+    #allζ = reduce(vcat, ζ)
+    #HM = [zeros(length(bh_positions), length(bh_positions), length(ζζ)) for ζζ in ζ]
+    HM = [[zeros(length(bh_positions), length(bh_positions)) for ζζ in ζ[i]] for i in eachindex(ζ)]
+
+    for (l, vζ) in enumerate(ζ), (k, ζζ) in enumerate(vζ), (j, target) in enumerate(bh_positions), i in 1:j-1
+        σ = compute_distance(bh_positions[i], target)
+        setup = SegmentToPoint(D=D, H=H, z=z_eval, σ=σ)
+        lineparams = LineKernelParams(setup, ζζ/rb, ϵ, nmodel)
+        bin1 = FiniteLineSource.get_bin(lineparams.n1, bins)
+        bin2 = FiniteLineSource.get_bin(lineparams.n2, bins)
+        HM[l][k][i, j] = compute_kernel_line(lineparams; x1=X[bin1], x2=X[bin2], X1=XT[bin1], X2=XT[bin2], P1=PP[bin1], P2=PP[bin2], f1=Fx[bin1], f2=Fx[bin2])
+        HM[l][k][j, i] = HM[l][k][i, j]
     end
-    HM = [[[G(source, target, ζζ) for source in bh_positions, target in bh_positions] for ζζ in ζ[i]] for i in eachindex(ζ)]
 
     N, ζ, W, F, expt, expNin, expNout, HM, load_delays, load_buffer
 end
 
-N, ζ, W, F, expt, expNin, expNout, HM, load_delays, load_buffer = @time prepare_containers(bh_positions)
+N, ζ, W, F, expt, expNin, expNout, HM, load_delays, load_buffer = @time prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
 @info "Precomputation finished"
 #=
 Profile.Allocs.clear()
-@time Profile.Allocs.@profile sample_rate=0.05 prepare_containers(bh_positions)
+@time Profile.Allocs.@profile sample_rate=0.05 prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
 PProf.Allocs.pprof(from_c=false)
 =#
 
@@ -186,7 +186,7 @@ function compute_one_case(source, target)
     k_min = findlast(x -> x <= N_r, N)
     for j in length(F):-1:k_min
         for k in eachindex(ζ[j])
-            I_1 += C * F[j][k] * W[j][k] * HM[j][k][target, source]
+            I_1 += C * F[j][k] * W[j][k] * HM[j][target, source, k]
         end
     end
 
