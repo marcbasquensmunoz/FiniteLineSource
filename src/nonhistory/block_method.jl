@@ -27,6 +27,11 @@ end
 """
 Compute the number of steps N that can be skipped for a line to point
 """
+function compute_N_line(ϵ, setup::SegmentToPoint, params::Constants) 
+    @unpack σ, D, H, z = setup
+    compute_N_line(σ, D, H, z, ϵ, params)
+end
+
 function compute_N_line(σ, D, H, z, ϵ, params::Constants) 
     @unpack Δt, α, kg = params
     f(N) = quadgk(zp -> erfc(sqrt(σ^2 + (zp - z)^2) / sqrt(4α * Δt * N))/(4*π*kg*sqrt(σ^2 + (zp - z)^2)), D, D+H)[1] - ϵ
@@ -78,7 +83,7 @@ function compute_ζ_points(N, No, ϵ, Q, n, params::Constants)
 end
 
 function taylor(r, σ, m)
-    f(x) = 1/(x^2-σ^2)^(1/2)
+    f(x) = 1/sqrt(x^2-σ^2)
     # This returns the Taylor coefficients, to get the derivatives we need to multiply by m!
     derivatives(f, r, 1., Val(m)).partials
 end
@@ -87,13 +92,23 @@ end
 Compute the minimum number of terms n to use in the Legendre expansion of the function 1/sqrt(x^2-σ^2)
 to obtain an error lower than ϵ in the interval [a, b].
 """
-function N_bound(ϵ, a, b, σ; C = 1, m = 30)
-    #@show a, b
+function N_bound(ϵ, a, b, σ, eval; C = 1., m = 30, n_max = 500)
+    return Int(ceil(eval(ϵ, σ, a, b)))
     M = 1:m
-    Vm = C .* abs.(taylor(a, σ, m) .- taylor(b, σ, m))
-
+    #Vm = C .* abs.(taylor(a, σ, m) .- taylor(b, σ, m))
+    Vm = abs.(taylor(a, σ, m) .- taylor(b, σ, m)) .* (M/exp(1)) .^ M .* sqrt.(2*π .* M) .* ((b-a)/2) .^ M
     # Here we use the Stirling approximation for the factorial in order to avoid computing the factorials
-    Int(ceil(minimum(@. (2π*M)^(1/(2M+1)) * (M/exp(1))^(M/(M + 1/2))*(Vm / (ϵ * sqrt(π*(M+0.5))))^(1/(M+0.5)) + M)))
+    n = Int(ceil(minimum(@. (2π*M)^(1/(2M+1)) * (Vm / (ϵ * sqrt(π*(M+0.5))))^(1/(M+0.5)) + M)))
+    min(n_max, n)
+end
+
+function N_bound_1(ϵ, a, b, σ)
+    #C = 0.3
+    C = 0.65
+    #α = 0.3386
+    α = 0.116
+    return Int(ceil(-log(ϵ/C)/α)) 
+    Int(ceil(- 0.8 * log10(ϵ/5) * sqrt(b-a)/(a-σ)^(1/2)))
 end
 
 compute_ζ_points_line(N, No, ϵ, Q, n, setup::SegmentToPoint, params::Constants) =
@@ -103,19 +118,27 @@ compute_ζ_points_line(N, No, ϵ, Q, n, setup::SegmentToPoint, params::Constants
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
 function compute_ζ_points_line(N, No, ϵ, Q, n, D, H, z, params::Constants)
-    @unpack Δt, α, rb = params
+    @unpack Δt, α, rb, kg = params
     Δt̃ = Δt*α/rb^2
 
     heatwave(σ) = quadgk(zp -> erfc(sqrt(σ^2 + (zp - z)^2) / sqrt(4α * Δt * N))/(4*π*kg*sqrt(σ^2 + (zp - z)^2)), D, D+H)[1] - ϵ
     σ = find_zero(heatwave, sqrt(N))
-    σ̃ = σ/rb
 
     a = 0.
     b = sqrt(-log(ϵ/Q) / (N*Δt̃))
 
-    setup = SegmentToPoint(D=D, H=H, z=z_eval, σ=σ)
+    #b = find_zero(bb -> 2ϵ/z_int - (gamma(0, bb^2*N*Δt̃) - gamma(0, bb^2*(N+1)*Δt̃)), sqrt(-log(ϵ) / (N*Δt̃)))
 
-    Nl = Int(ceil(-log10(ϵ))) * 17 
+    z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2)))
+    a = 0.
+    b = find_zero(bb -> 2ϵ/(z_int*rb) - (No-N) * (gamma(0, bb^2*N*Δt̃) - gamma(0, bb^2*(N+1)*Δt̃)), -log(ϵ) / (2N*Δt̃))
+    if b == 0
+        b = sqrt(-log(ϵ) / (N*Δt̃))
+    end
+
+    setup = SegmentToPoint(D=D, H=H, z=z, σ=σ)
+
+    Nl = Int(ceil(-log10(ϵ))) * 20
     xb, wb = gausslegendre(Nl+1) 
     Pb = [wb[s] * Pl(xb[s], k) for k = 0:Nl, s = 1:Nl+1]
     Xb = zeros(Nl+1)
@@ -123,7 +146,7 @@ function compute_ζ_points_line(N, No, ϵ, Q, n, D, H, z, params::Constants)
 
     int_sin(ζ) = compute_kernel_line(ζ, rb, setup, x=xb, X=Xb, P=Pb, f=aux, atol=ϵ) 
 
-    guide(ζ) = (exp(-ζ^2*N*Δt̃) + 50 * exp(-ζ^2*No*Δt̃)) * int_sin(ζ) * (1 - exp(-ζ^2*Δt̃)) / ζ
+    guide(ζ) = (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * int_sin(ζ) * (1 - exp(-ζ^2*Δt̃)) / ζ
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
     sort!(segbuf, by=x->x.a)
     n_seg = length(segbuf)
@@ -156,6 +179,12 @@ end
     n2::Int
 end
 
+@with_kw struct LineKernelContainers{T <: Number} @deftype T
+    x::Vector{T}
+    X::Vector{T}
+    f::Vector{T}
+    P::Matrix{T}
+end 
 
 @with_kw struct LineToLineKernelParams{T <: Number} @deftype T
     r1
@@ -168,21 +197,13 @@ end
     α3
     ω
     σ
-    x1::Vector{T}
-    x2::Vector{T}
-    x3::Vector{T}
-    X1::Vector{T}
-    X2::Vector{T}
-    X3::Vector{T}
-    f1::Vector{T}
-    f2::Vector{T}
-    f3::Vector{T}
-    P1::Matrix{T}
-    P2::Matrix{T}
-    P3::Matrix{T}
+    ϵ
+    n1::Int
+    n2::Int
+    n3::Int
 end
 
-function LineKernelParams(setup::SegmentToPoint, ω, ϵ)
+function LineKernelParams(setup::SegmentToPoint, ω, ϵ, eval; n_max=500)
     @unpack D, H, z, σ = setup
 
     rB = sqrt(σ^2 + (z - D - H)^2 )
@@ -192,20 +213,21 @@ function LineKernelParams(setup::SegmentToPoint, ω, ϵ)
     r2 = min(rB, rT)
     r3 = max(rB, rT)
     #rs = r1 + 4π/ω
-    rs = r1 + min(4π/ω, (r2-r1)) 
+    #rs = r1 + min(4π/ω, (r2-r1)*0.1) 
+    rs = min(r1 + max(2, (r2-r1) * 0.01), r2)
     n1, n2 = 0, 0
 
     #@show r1, rs, r2, r3
     if r1 != r2
         #@info "Computing n corresponding to I2"
-        n1 = N_bound(ϵ / (6 * sqrt(r2-rs)), rs, r2, σ, C=2) + 20
+        n1 = N_bound(ϵ / (6), rs, r2, σ, eval, n_max=n_max)
         #@show rs, r2, σ, ϵ / (6 * sqrt(r2-rs)), n1
     end
 
     if r2 != r3
         #@info "Computing n corresponding to I1"
         rl = max(r2, rs)
-        n2 = N_bound(ϵ / (3 * sqrt(r3-rl)), rl, r3, σ) + 20
+        n2 = N_bound(ϵ / (3 * sqrt(r3-rl)), rl, r3, σ, eval, n_max=n_max)
         #@show rl, r3, σ, ϵ / (3 * sqrt(r3-rl)), n2
     end
 
@@ -213,7 +235,7 @@ function LineKernelParams(setup::SegmentToPoint, ω, ϵ)
 end
 
 
-function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ)
+function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ, eval)
     @unpack D1, H1, D2, H2, σ = setup
 
     rLR = sqrt(σ^2 + (D2 - D1 - H1)^2     ) 
@@ -226,42 +248,30 @@ function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ)
     r3 = H2 > H1 ? (D2 + H2 > D1 + H1 ? rUR : σ) : (D2 > D1 ? rLL : σ)
     r4 = D2 + H2 > D1 ? rUL : σ
 
-    rs = r1 + 4π/ω
+    #rs = r1 + 4π/ω
+    rt = r1 == r2 ? (r1 == r3 ? r4 : r3) : r2
+    rs = min(r1 + max(2, (rt-r1) * 0.01), rt)
 
     α1 = D1 - D2 + H1
     α2 = min(H1, H2)
     α3 = D2 - D1 + H2
-
-    x1, x2, x3 = zeros(0), zeros(0), zeros(0)
-    X1, X2, X3 = zeros(0), zeros(0), zeros(0)
-    f1, f2, f3 = zeros(0), zeros(0), zeros(0)
-    P1, P2, P3 = zeros(0, 0), zeros(0, 0), zeros(0, 0)
+    n1, n2, n3 = 0, 0, 0
 
     if r1 != r2
-        n1 = N_bound(ϵ / (3α1 * sqrt(r2-rs)), rs, r2, σ)
-        x1, w1 = gausslegendre(n1+1) 
-        P1 = [w1[s] * Pl(x1[s], k) for k in 0:n1, s in 1:n1+1]
-        X1 = zeros(n1+1)
-        f1 = zeros(n1+1)
+        n1 = N_bound(ϵ / (3α1 * sqrt(r2-rs)), rs, r2, σ, eval)
     end
 
     if r2 != r3
         rl = max(r2, rs)
-        n2 = N_bound(ϵ / (3α2 * sqrt(r3-rl)), rl, r3, σ)
-        x2, w2 = gausslegendre(n2+1) 
-        P2 = [w2[s] * Pl(x2[s], k) for k in 0:n2, s in 1:n2+1]
-        X2, f2 = zeros(n2+1), zeros(n2+1)
+        n2 = N_bound(ϵ / (3α2 * sqrt(r3-rl)), rl, r3, σ, eval)
     end
 
     if r3 != r4
         rl = max(r3, rs)
-        n3 = N_bound(ϵ / (3α3 * sqrt(r4-rl)), rl, r4, σ)
-        x3, w3 = gausslegendre(n3+1) 
-        P3 = [w3[s] * Pl(x3[s], k) for k in 0:n3, s in 1:n3+1]
-        X3, f3 = zeros(n3+1), zeros(n3+1)
+        n3 = N_bound(ϵ / (3α3 * sqrt(r4-rl)), rl, r4, σ, eval)
     end
 
-    LineToLineKernelParams(r1=r1, r2=r2, r3=r3, r4=r4, rs=rs, α1=α1, α2=α2, α3=α3, ω=ω, σ=σ, x1=x1, x2=x2, x3=x3, X1=X1, X2=X2, X3=X3, f1=f1, f2=f2, f3=f3, P1=P1, P2=P2, P3=P3)
+    LineToLineKernelParams(r1=r1, r2=r2, r3=r3, r4=r4, rs=rs, α1=α1, α2=α2, α3=α3, ω=ω, σ=σ, ϵ=ϵ, n1=n1, n2=n2, n3=n3)
 end
 
 function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X1=nothing, X2=nothing, P1=nothing, P2=nothing, f1=nothing, f2=nothing)
@@ -282,20 +292,43 @@ function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X
         I_div = I1 + I2
     end
 
+    n1 = length(X1) - 1
     if r1 != r2
         #@info "Computing I2"
+        
         m1 = (r2-rs)/2
         c1 = (r2+rs)/2
         @. X1 = m1*x1 + c1
 
-        @. f1 = 2 / sqrt(X1^2-σ^2)
+        @. f1 = 2. / sqrt(abs(X1^2-σ^2))
         besselj!(X1, 1/2:(n1+1/2), m1*ω)
         @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
 
-        # This version creates less allocations, but runs slower
-        #I_osc = sqrt(m*π/(2ω)) * dot(X, P, f)
+        #I_osc = sqrt(m*π/(2ω)) * dot(X, P, f) # This version creates less allocations, but runs slower
         I_osc += sqrt(m1*π/(2ω)) * X1' * P1 * f1
+
+        #=
+        rs1 = rs + 1.
+
+        m1 = (rs1-rs)/2
+        c1 = (rs1+rs)/2
+        @. X1 = m1*x1 + c1
+        @. f1 = 2. / sqrt(abs(X1^2-σ^2))
+        besselj!(X1, 1/2:(n1+1/2), m1*ω)
+        @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
+        I_osc += sqrt(m1*π/(2ω)) * X1' * P1 * f1
+
+        m1 = (r2-rs1)/2
+        c1 = (r2+rs1)/2
+        @. X1 = m1*x1 + c1
+        @. f1 = 2. / sqrt(abs(X1^2-σ^2))
+        besselj!(X1, 1/2:(n1+1/2), m1*ω)
+        @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
+        I_osc += sqrt(m1*π/(2ω)) * X1' * P1 * f1
+        =#
     end
+
+    n2 = length(X2) - 1
 
     if r2 != r3    
         #@info "Computing I1"
@@ -359,54 +392,8 @@ function compute_kernel_line(ζ, rb, setup::SegmentToPoint; x, X, P, f, atol=1e-
     I_div + I_osc
 end
 
-function compute_kernel_line(ζ, rb, setup::SegmentToPoint; x, X, P, f, atol=1e-8)
-    @unpack D, H, z, σ = setup
-    rmin = σ
-    rB = sqrt(σ^2 + (z - D - H)^2 )
-    rT = sqrt(σ^2 + (z - D)^2     )
-    
-    r1 = (D < z && z < D+H) ? rmin : min(rB, rT)
-    r2 = min(rB, rT)
-    r3 = max(rB, rT)
-
-    ω = ζ/rb
-    h(r) = r < r2 ? 2. : 1.
-
-    split = r1
-    I_div = 0.
-
-    if r1 == σ
-        split = r1 + min(4π/ω, (r3-r1)*0.1)
-        mult = r1 == r2 ? 1. : 2.
-        C = mult * sin(σ*ω)
-        h_reg(r) = r == σ ? 0. : (sin(r*ω) * h(r) - C) / sqrt(r^2-σ^2)
-        # We could do the integration vectorized in ω
-        I1, E, count = quadgk_count(h_reg, r1, split, atol=atol)
-        #@show E, count
-        I2 = C * acoth(split/sqrt(split^2-r1^2))
-        I_div = I1 + I2
-    end
-    #@show split, r3
-
-    m = (r3-split)/2
-    c = (r3+split)/2
-
-    n = length(x)-1
-    @. X = m*x + c
-    @. f = h(X) / sqrt(X^2-σ^2)
-
-    besselj!(X, 1/2:(n+1/2), m*ω)
-    @. X = X * imag(exp(im*ω*c) * im^(0:n)) * (2(0:n)+1)
-
-    # This version creates less allocations, but runs 6 μs slower
-    #I_osc = sqrt(m*π/(2ω)) * dot(X, P, f)
-    I_osc = sqrt(m*π/(2ω)) * X' * P * f
-    I_div + I_osc
-end
-
-
-function compute_kernel_double_line_part(params::LineToLineKernelParams; atol=1e-8)
-    @unpack r1, r2, r3, r4, rs, ω, α1, α2, α3, σ, x1, x2, x3, X1, X2, X3, f1, f2, f3, P1, P2, P3 = params
+function compute_kernel_double_line_part(params::LineToLineKernelParams; x1=nothing, x2=nothing, x3=nothing, X1=nothing, X2=nothing, X3=nothing, f1=nothing, f2=nothing, f3=nothing, P1=nothing, P2=nothing, P3=nothing)
+    @unpack r1, r2, r3, r4, rs, ω, ϵ, α1, α2, α3, σ = params
 
     h(r) = r < r2 ? α1 : (r < r3 ? α2 : α3)
     I_div = 0.
@@ -416,10 +403,9 @@ function compute_kernel_double_line_part(params::LineToLineKernelParams; atol=1e
         mult = r1 == r2 ? (r2 == r3 ? α3 : α2) : α1
         C = mult * sin(σ*ω)
         h_reg(r) = r == σ ? 0. : (sin(r*ω) * h(r) - C) / sqrt(r^2-σ^2)
-        I1, E, count = quadgk_count(h_reg, r1, rs, atol=atol/3)
+        I1, _ = quadgk(h_reg, r1, rs, atol=ϵ/3)
         I2 = C * acoth(rs/sqrt(rs^2-r1^2))
         I_div = I1 + I2
-        #@show I_div
     end
 
     if r1 != r2
@@ -507,7 +493,7 @@ function compute_kernel_double_line_part(ζ, rb, setup::SegmentToSegment; x, X, 
 
     n = length(x)-1
     @. X = m*x + c
-    @. f = h1(X) / real(sqrt(complex(X)^2-σ^2))
+    @. f = h1(X) / sqrt(X^2-σ^2)
 
     besselj!(X, 1/2:(n+1/2), m*ω)
     @. X = X * imag(exp(im*ω*c) * im^(0:n)) * (2(0:n)+1)
@@ -524,3 +510,33 @@ function compute_kernel_double_line(ζ, rb, setup::SegmentToSegment; x, X, P, f,
     I2 = compute_kernel_double_line_part(ζ, rb, tranposed_setup, x=x, X=X, P=P, f=f, atol=atol)
     (I1+I2)/setup.H2
 end
+
+function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::LineToLineKernelParams; x1=nothing, x2=nothing, x3=nothing, X1=nothing, X2=nothing, X3=nothing, f1=nothing, f2=nothing, f3=nothing, P1=nothing, P2=nothing, P3=nothing)
+    I1 = compute_kernel_double_line_part(params, x1=x1, x2=x2, x3=x3, X1=X1, X2=X2, X3=X3, f1=f1, f2=f2, f3=f3, P1=P1, P2=P2, P3=P3)
+    I2 = compute_kernel_double_line_part(paramsT, x1=x1, x2=x2, x3=x3, X1=X1, X2=X2, X3=X3, f1=f1, f2=f2, f3=f3, P1=P1, P2=P2, P3=P3)
+    (I1+I2)
+end
+
+function create_bin_containers(bins)
+    X = Vector{Vector{Float64}}()
+    W = Vector{Vector{Float64}}()
+    PP = Vector{Matrix{Float64}}()
+    F = Vector{Vector{Float64}}()
+    XT = Vector{Vector{Float64}}()
+
+    for n in bins
+        x, w = gausslegendre(n+1)
+        P = [w[s] * Pl(x[s], k) for k in 0:n, s in 1:n+1]
+        f = zeros(n+1)
+        xt = zeros(n+1)
+
+        push!(X, x)
+        push!(W, w)
+        push!(F, f)
+        push!(PP, P)
+        push!(XT, xt)
+    end
+
+    X, W, F, PP, XT
+end
+get_bin(n, bins) = findfirst(m -> n < m, bins)
