@@ -147,7 +147,7 @@ function evolve!(I, q, block::BlockMethod)
 
         bh_indices = 1:size(block.K_min)[1]
         for target in bh_indices
-            for source in 1:bh_indices
+            for source in bh_indices
                 if source == target continue end
                 range = Kranges[K_min[source, target]]
                 @views I[target, nt] += dot(F[range], HM[range, target, source])
@@ -157,13 +157,9 @@ function evolve!(I, q, block::BlockMethod)
 end
 
 
-N, block = @time prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
+N, block = @time prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel);
 Istp = zeros(length(bh_positions), Nt)
 @time evolve!(Istp, q, block)
-
-Profile.clear()
-@profile evolve!(Istp, q, block)
-pprof()
 
 #####################################
 # Validation
