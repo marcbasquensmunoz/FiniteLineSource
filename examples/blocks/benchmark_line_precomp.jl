@@ -10,7 +10,7 @@ using Parameters
 
 ϵ = 1e-6
 Δt = 3600.
-Nt = 24*8760
+Nt = 900
 
 bn = 10
 bm = 10
@@ -113,11 +113,46 @@ Profile.Allocs.clear()
 PProf.Allocs.pprof(from_c=false)
 =#
 
-@time begin
 #####################################
 # Evolution in time
 #####################################
-for qt in q
+Istp = zeros(length(bh_positions), Nt)
+
+distances = [compute_distance(source, target) for source in bh_positions, target in bh_positions]
+NR = [σ == 0 ? 0. : compute_N_line(σ, D, H, z_eval, ϵ, params) for σ in distances]
+K_min = [N_r == 0 ? 0 : findlast(x -> x <= N_r, N) for N_r in NR]
+
+for i in eachindex(W)
+    for j in eachindex(W[i])
+        HM[i][j] .*= W[i][j]
+    end
+end
+C = 1 / (2π^2*kg)
+
+ζflat = reduce(vcat, ζ)
+Fflat = reduce(vcat, F)
+HMflat = zeros(length(ζflat), length(bh_positions), length(bh_positions))
+i = 1
+for vhm in HM
+    for hm in vhm
+        @. HMflat[i, :, :] = hm
+        i += 1
+    end
+end
+exptflat = reduce(vcat, expt)
+expNinflat = reduce(vcat, expNin)
+expNoutflat = reduce(vcat, expNout)
+
+qinaux = zeros(length(ζflat))
+qoutaux = zeros(length(ζflat))
+
+indices = cumsum([length(F[i]) for i in eachindex(F)])
+insert!(indices, 1, 0)
+ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
+Kranges = [index+1:indices[end] for index in indices[1:end-1]]
+
+@time begin
+for (nt, qt) in enumerate(q)
     enqueue!(load_buffer, qt)
     current_q = dequeue!(load_buffer)
 
@@ -126,33 +161,16 @@ for qt in q
         enqueue!(load_delays[i], qin)
         qout = dequeue!(load_delays[i])
         current_q = qout
-        @. F[i] = expt[i] * F[i] + qin * expNin[i] - qout * expNout[i]
+        @. qinaux[ranges[i]] = qin
+        @. qoutaux[ranges[i]] = qout
     end
-end
+    @. Fflat = exptflat * Fflat + C * (qinaux * expNinflat - qoutaux * expNoutflat) * (1 - exptflat) / ζflat
 
-#####################################
-# Complete F
-#####################################
-C = 1 / (2π^2*kg)
-for i in eachindex(F)
-    @. F[i] = F[i] * (1 - expt[i]) / ζ[i]
-end
-
-#####################################
-# Compute the integral
-#####################################
-
-Istp = zeros(length(bh_positions))
-for target in eachindex(bh_positions)
-    for source in eachindex(bh_positions)
-        if source == target continue end
-        r = compute_distance(bh_positions[source], bh_positions[target])
-        N_r = compute_N_line(r, D, H, z_eval, ϵ, params)
-        k_min = findlast(x -> x <= N_r, N)
-        for j in length(F):-1:k_min
-            for k in eachindex(ζ[j])
-                Istp[target] += C * F[j][k] * W[j][k] * HM[j][k][target, source]
-            end
+    for target in eachindex(bh_positions)
+        for source in eachindex(bh_positions)
+            if source == target continue end
+            k_min = K_min[source, target]
+            @views Istp[target, nt] += dot(Fflat[Kranges[k_min]], HMflat[Kranges[k_min], target, source])
         end
     end
 end
@@ -172,7 +190,7 @@ for target in eachindex(bh_positions)
     end
 end
 
-err = @. abs(Istp - STP_test)
+err = @. abs(Istp[:, end] - STP_test)
 
 #####################################
 # Validation of one case
