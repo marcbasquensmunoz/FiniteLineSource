@@ -1,5 +1,5 @@
 using FiniteLineSource
-using FiniteLineSource: create_bin_containers, get_bin
+using FiniteLineSource: create_bin_containers, get_bin, DiscretizationParameters, SegmentToPoint
 using FastGaussQuadrature
 using LegendrePolynomials
 using HMatrices
@@ -7,13 +7,14 @@ using DataStructures
 using QuadGK
 using SpecialFunctions
 using Parameters
+using LinearAlgebra
 
 ϵ = 1e-6
 Δt = 3600.
-Nt = 900
+Nt = 8760
 
-bn = 10
-bm = 10
+bn = 2
+bm = 2
 
 α = 1e-6
 kg = 3.
@@ -49,6 +50,27 @@ struct BlockMethod{T <: Number}
     qoutaux::Vector{T}
 end
 
+function bakhalov_discretization(N)
+    σ = rb
+    Δt̃ = α*Δt/rb^2
+    n = 10
+
+    setup = SegmentToPoint(σ=σ, D=D, H=H, z=z)
+
+    z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2)))
+    a = 0.
+    b = find_zero(bb -> 2ϵ/(z_int*rb) - N * (gamma(0, bb^2*Δt̃) - gamma(0, bb^2*2*Δt̃)), -log(ϵ) / (2N*Δt̃))
+
+    guide(ζ) = (1 + exp(-ζ^2*Δt̃*N))* (1 - exp(-ζ^2*Δt̃)) / ζ
+    _, _, segments = quadgk_segbuf(guide, a, b)
+    dps = @views [DiscretizationParameters(s.a, s.b, n) for s in segments]
+    x  = reduce(vcat, (dp.x for dp in dps))
+    w  = reduce(vcat, [FiniteLineSource.precompute_coefficients(setup, dp=dp, params=params, containers=FiniteLineSource.EmptyContainer()) for (i, dp) in enumerate(dps)])
+    fx = zeros(sum([dp.n+1 for dp in dps]))
+    perm = sortperm(x)
+    x[perm], w[perm], fx
+end
+
 function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
     @unpack Δt, α, rb = params
     Δt̃ = Δt*α/rb^2
@@ -62,6 +84,7 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
     Nr = [compute_N_line(r, D, H, z_eval, ϵ, params) for r in R]
     sort!(Nr)
     N = choose_blocks(Nr, p = 10)
+    unique!(N)
 
     ζ = [zeros(0) for _ in eachindex(N)]
     W = [zeros(0) for _ in eachindex(N)]
@@ -71,6 +94,9 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
         No = i == length(N) ? 3*N[i] : N[i+1]
         ζ[i], W[i] = compute_ζ_points_line(Ni, No, ϵ, 1., 10, D, H, z_eval, params)
     end
+
+    setup = SegmentToPoint(σ=rb, D=D, H=H, z=z)
+    precomputation = precompute_parameters(setup, params=params)
 
     # Preallocate objects
     F = [zeros(length(ζ[i])) for i in eachindex(N)]
@@ -113,7 +139,7 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
     C = 1 / (2π^2*kg)
 
     for (k, ζζ) in enumerate(ζflat), (j, target) in enumerate(bh_positions), i in 1:j-1
-        σ = compute_distance(bh_positions[i], target)
+        σ = i == j ? rb : compute_distance(bh_positions[i], target)
         setup = SegmentToPoint(D=D, H=H, z=z_eval, σ=σ)
         lineparams = LineKernelParams(setup, ζζ/rb, ϵ, nmodel)
         bin1 = FiniteLineSource.get_bin(lineparams.n1, bins)
@@ -125,15 +151,25 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
     qin = zeros(length(ζflat))
     qout = zeros(length(ζflat))
 
-    N, BlockMethod(ζflat, Fflat, exptflat, expNinflat, expNoutflat, HMflat, load_delays, load_buffer, ranges, Kranges, K_min, qin, qout)
+    @show length(ζflat)
+    N, precomputation, BlockMethod(ζflat, Fflat, exptflat, expNinflat, expNoutflat, HMflat, load_delays, load_buffer, ranges, Kranges, K_min, qin, qout)
 end
 
-function evolve!(I, q, block::BlockMethod)
+function evolve!(I, q, block::BlockMethod, precomp)
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, ranges, Kranges, K_min, qinaux, qoutaux = block
+    @unpack x, w, fx, I_c = precomp
+
+    exptf = @. exp(-x^2* Δt̃)
 
     for (nt, qt) in enumerate(q)
         enqueue!(load_buffer, qt)
         current_q = dequeue!(load_buffer)
+
+        @. fx = exptf * (fx - qt / x)
+        for target in 1:size(block.K_min)[1]
+            I[target, nt] += dot(fx, w) + qt * I_c
+        end
+        @. fx = fx + qt / x
 
         for i in eachindex(load_delays)
             qin = current_q
@@ -157,9 +193,9 @@ function evolve!(I, q, block::BlockMethod)
 end
 
 
-N, block = @time prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel);
+N, precomp, block = @time prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel);
 Istp = zeros(length(bh_positions), Nt)
-@time evolve!(Istp, q, block)
+@time evolve!(Istp, q, block, precomp)
 
 #####################################
 # Validation
@@ -168,8 +204,8 @@ Istp = zeros(length(bh_positions), Nt)
 STP_test = zeros(length(bh_positions))
 for target in eachindex(bh_positions)
     for source in eachindex(bh_positions)
-        if source == target continue end
-        σ = compute_distance(bh_positions[source], bh_positions[target])
+        #if source == target continue end
+        σ = source == target ? rb : compute_distance(bh_positions[source], bh_positions[target])
         I, E = quadgk(zp -> erfc(sqrt(σ^2 + (zp - z_eval)^2) / sqrt(4α * Δt * Nt))/(4*π*kg*sqrt(σ^2 + (zp - z_eval)^2)), D, D+H, atol = ϵ/100)
         STP_test[target] += I
     end
@@ -177,6 +213,7 @@ end
 
 err = @. abs(Istp[:, end] - STP_test)
 
+#=
 #####################################
 # Validation of one case
 #####################################
@@ -200,3 +237,4 @@ end
 cases = [compute_one_case(source, target) for target in 1:length(bh_positions), source in 1:length(bh_positions)]
 
 compute_one_case(1, 4)
+=#
