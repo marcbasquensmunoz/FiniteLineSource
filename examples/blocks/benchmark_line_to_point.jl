@@ -8,13 +8,14 @@ using QuadGK
 using SpecialFunctions
 using Parameters
 using LinearAlgebra
+using Roots
 
 ϵ = 1e-6
 Δt = 3600.
-Nt = 8760
+Nt = 10000
 
-bn = 2
-bm = 2
+bn = 1
+bm = 1
 
 α = 1e-6
 kg = 3.
@@ -23,7 +24,7 @@ rb = 0.1
 
 D = 0.
 H = 100.
-B = 10.
+B = 1.1
 z_eval = D+H/2
 
 q = [1. for t in 1:Nt]
@@ -32,7 +33,7 @@ bh_positions = [(B*(i-1)^2, B*(j-1)^2) for i in 1:bn for j in 1:bm]
 
 compute_distance(x, y) = sqrt((x[1] - y[1])^2 + (x[2] - y[2])^2)
 
-params = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
+params = Constants(Δt=Δt, α=α, kg=kg, rb=rb,line_points=[1, 1, 1, 1, 1] .* 500, line_limits=[0., 0.1, 0.3, 0.7, 0.9, 1.])
 
 struct BlockMethod{T <: Number}
     ζ::Vector{T}
@@ -48,6 +49,13 @@ struct BlockMethod{T <: Number}
     K_min::Matrix{Int}
     qinaux::Vector{T}
     qoutaux::Vector{T}
+    sr_ζ::Vector{T}
+    sr_w::Vector{T}
+    sr_F::Vector{T}
+    sr_expt::Vector{T}
+    sr_expNout::Vector{T}
+    sr_Ic::T
+    sr_Icout::T
 end
 
 function bakhalov_discretization(N)
@@ -68,7 +76,13 @@ function bakhalov_discretization(N)
     w  = reduce(vcat, [FiniteLineSource.precompute_coefficients(setup, dp=dp, params=params, containers=FiniteLineSource.EmptyContainer()) for (i, dp) in enumerate(dps)])
     fx = zeros(sum([dp.n+1 for dp in dps]))
     perm = sortperm(x)
-    x[perm], w[perm], fx
+
+    expt = @. exp(-x^2 * Δt̃)
+    exptout = @. exp(-x^2 * N * Δt̃)
+    Ic = log((z-D + sqrt(σ^2 + (z-D)^2))/(z-D-H + sqrt(σ^2 + (z-D-H)^2))) /  (4π * kg)
+    Icout = quadgk(zp -> erf(sqrt(rb^2 + (zp - z)^2)/rb/sqrt(4*N*Δt̃)) / sqrt(rb^2 + (zp - z)^2), D, D+H)[1] / (4π * kg)
+
+    x[perm], w[perm], fx, expt, exptout, Ic, Icout
 end
 
 function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
@@ -83,7 +97,7 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
     # Choose blocks and compute points
     Nr = [compute_N_line(r, D, H, z_eval, ϵ, params) for r in R]
     sort!(Nr)
-    N = choose_blocks(Nr, p = 10)
+    N = isempty(Nr) ? [10] :  choose_blocks(Nr, p = 10)
     unique!(N)
 
     ζ = [zeros(0) for _ in eachindex(N)]
@@ -96,8 +110,8 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
     end
 
     setup = SegmentToPoint(σ=rb, D=D, H=H, z=z)
-    precomputation = precompute_parameters(setup, params=params)
-
+    sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = bakhalov_discretization(10)
+    
     # Preallocate objects
     F = [zeros(length(ζ[i])) for i in eachindex(N)]
     expt = [@. exp(-ζ[i]^2*Δt̃) for i in eachindex(F)]
@@ -121,7 +135,7 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
 
     distances = [compute_distance(source, target) for source in bh_positions, target in bh_positions]
     NR = [σ == 0 ? 0. : compute_N_line(σ, D, H, z_eval, ϵ, params) for σ in distances]
-    K_min = [N_r == 0 ? 0 : findlast(x -> x <= N_r, N) for N_r in NR]
+    K_min = [N_r == 0 ? 1 : findlast(x -> x <= N_r, N) for N_r in NR]
     indices = cumsum([length(F[i]) for i in eachindex(F)])
     insert!(indices, 1, 0)
     ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
@@ -138,7 +152,7 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
 
     C = 1 / (2π^2*kg)
 
-    for (k, ζζ) in enumerate(ζflat), (j, target) in enumerate(bh_positions), i in 1:j-1
+    for (k, ζζ) in enumerate(ζflat), (j, target) in enumerate(bh_positions), i in 1:j
         σ = i == j ? rb : compute_distance(bh_positions[i], target)
         setup = SegmentToPoint(D=D, H=H, z=z_eval, σ=σ)
         lineparams = LineKernelParams(setup, ζζ/rb, ϵ, nmodel)
@@ -151,30 +165,48 @@ function prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel)
     qin = zeros(length(ζflat))
     qout = zeros(length(ζflat))
 
-    @show length(ζflat)
-    N, precomputation, BlockMethod(ζflat, Fflat, exptflat, expNinflat, expNoutflat, HMflat, load_delays, load_buffer, ranges, Kranges, K_min, qin, qout)
+    BlockMethod(
+        ζflat, 
+        Fflat, 
+        exptflat, 
+        expNinflat, 
+        expNoutflat, 
+        HMflat, 
+        load_delays, 
+        load_buffer, 
+        ranges, 
+        Kranges, 
+        K_min, 
+        qin, 
+        qout,
+        sr_ζ,
+        sr_w,
+        sr_F,
+        sr_expt,
+        sr_expNout,
+        sr_Ic,
+        sr_Icout
+    )
 end
 
-function evolve!(I, q, block::BlockMethod, precomp)
-    @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, ranges, Kranges, K_min, qinaux, qoutaux = block
-    @unpack x, w, fx, I_c = precomp
-
-    exptf = @. exp(-x^2* Δt̃)
+function evolve!(I, q, block::BlockMethod)
+    @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
+        ranges, Kranges, K_min, qinaux, qoutaux, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = block
 
     for (nt, qt) in enumerate(q)
         enqueue!(load_buffer, qt)
         current_q = dequeue!(load_buffer)
-
-        @. fx = exptf * (fx - qt / x)
+        
+        @. sr_F = sr_expt * (sr_F - qt / sr_ζ + sr_expNout * current_q / sr_ζ)
         for target in 1:size(block.K_min)[1]
-            I[target, nt] += dot(fx, w) + qt * I_c
+            I[target, nt] += dot(sr_F, sr_w) + qt * sr_Ic - current_q * sr_Icout
         end
-        @. fx = fx + qt / x
+        @. sr_F = sr_F + (qt - sr_expNout * current_q) / sr_ζ
 
         for i in eachindex(load_delays)
             qin = current_q
             enqueue!(load_delays[i], qin)
-            qout = dequeue!(load_delays[i])
+            qout = i == length(load_delays) ? 0. : dequeue!(load_delays[i])
             current_q = qout
             @. qinaux[ranges[i]] = qin
             @. qoutaux[ranges[i]] = qout
@@ -184,7 +216,6 @@ function evolve!(I, q, block::BlockMethod, precomp)
         bh_indices = 1:size(block.K_min)[1]
         for target in bh_indices
             for source in bh_indices
-                if source == target continue end
                 range = Kranges[K_min[source, target]]
                 @views I[target, nt] += dot(F[range], HM[range, target, source])
             end
@@ -193,9 +224,9 @@ function evolve!(I, q, block::BlockMethod, precomp)
 end
 
 
-N, precomp, block = @time prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel);
+block = @time prepare_containers(bh_positions, D, H, z_eval, ϵ, params, nmodel);
 Istp = zeros(length(bh_positions), Nt)
-@time evolve!(Istp, q, block, precomp)
+@time evolve!(Istp, q, block)
 
 #####################################
 # Validation
