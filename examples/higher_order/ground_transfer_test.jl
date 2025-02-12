@@ -7,21 +7,22 @@ rb = 0.1
 
 D = 0.
 H = 100.
-σ = 0.1
+σ = rb
 
 t = 30*24*3600.
 
 N = 10
 basis = LagrangeBasis(N)
 segments = [-1, -0.95, -0.9, -0.6, 0.6, 0.9, 0.95, 1.]
-bh_disc = BoreholeDiscretization(D, H, segments) 
+
+bh_disc = BoreholeDiscretization([-1., 1.], [[0., 0., D], [0., 0., D+H]], segments) 
 constants = Constants(α=α, kg=kg, Δt=t, rb=rb)
 
 Np = bh_disc.S * N
 
-q = vcat(2*ones(N*3), ones(N*4))
+q = ones(N*7)#vcat(2*ones(N*3), ones(N*4))
 GQT = zeros(Np, Np)
-g_Q_T!(GQT, bh_disc, basis, σ, constants)
+g_Q_T!(GQT, bh_disc, bh_disc, basis, constants, t)
 Tk = GQT * q
 
 response(z1, z2) = erfc(sqrt(σ^2 + (z1-z2)^2)/sqrt(4α*t)) / (4π*kg*sqrt(σ^2 + (z1-z2)^2))

@@ -3,6 +3,7 @@ using FastGaussQuadrature
 using QuadGK
 using LinearAlgebra
 using FiniteLineSource
+using StaticArrays
 
 indices(i::Int, N::Int) = (div(i-1, N)+1, (i-1)%N+1)
 struct LagrangeBasis{T <: Number}
@@ -55,20 +56,94 @@ end
 end
 
 struct BoreholeDiscretization{T <: Number}
-    D::T
-    H::T
+    #η::Vector{T}
+    #p::Vector{Vector{T}}
+    A::Matrix{T}
+    Nd::Int
     segments::Vector{T}
-    L::Vector{T}
     S::Int
 end
-BoreholeDiscretization(D, H, segments) = BoreholeDiscretization(D, H, segments, (segments[2:end] - segments[1:end-1]) .* H/2, length(segments) - 1)
+function BoreholeDiscretization(ξ, p, segments = ξ) 
+    Nd = 2
+    P = [map(x->x[i], p) for i in 1:3]
+    Ξ = [ξ[k]^m for k in 1:Nd, m in 0:Nd-1]
 
-s(ξ, p) = 50. * (ξ+1) #H/2 * (ξ+1) + D
-f1(ξ, p::InternalModelParams) = exp(p.β*s(ξ, p)) * (cosh(p.γ*s(ξ, p)) - p.δ*sinh(p.γ*s(ξ, p)))
-f2(ξ, p::InternalModelParams) = exp(p.β*s(ξ, p)) * p.β12/p.γ * sinh(p.γ*s(ξ, p))
-f3(ξ, p::InternalModelParams) = exp(p.β*s(ξ, p)) * (cosh(p.γ*s(ξ, p)) + p.δ*sinh(p.γ*s(ξ, p)))
-f4(ξ, p::InternalModelParams) = exp(p.β*s(ξ, p)) * (p.β1*cosh(p.γ*s(ξ, p)) - (p.δ*p.β1 + p.β2*p.β12/p.γ)*sinh(p.γ*s(ξ, p)))
-f5(ξ, p::InternalModelParams) = exp(p.β*s(ξ, p)) * (p.β2*cosh(p.γ*s(ξ, p)) + (p.δ*p.β2 + p.β1*p.β12/p.γ)*sinh(p.γ*s(ξ, p)))
+    A = zeros(Nd, 3)
+    for i in 1:3
+        A[:, i] = Ξ \ P[i]
+    end
+    BoreholeDiscretization(A, Nd, segments, length(segments) - 1)
+end
+function path(ξ, A, Nd)
+    x = 0.
+    y = 0.
+    z = 0.
+    for i in Nd-1:-1:0
+        x *= ξ
+        y *= ξ
+        z *= ξ
+        x += A[i+1, 1]
+        y += A[i+1, 2]
+        z += A[i+1, 3]
+    end
+    return @SVector [x, y, z]
+end
+path(ξ, d::BoreholeDiscretization) = path(ξ, d.A, d.Nd)
+function path(ξ, segment::Int, d::BoreholeDiscretization) 
+    @unpack segments = d
+    m = (segments[segment+1] - segments[segment])/2
+    c = (segments[segment+1] + segments[segment])/2
+    path(m*ξ+c , d)
+end
+function dpath(ξ, d::BoreholeDiscretization)
+    @unpack A, Nd = d
+    x = 0.
+    y = 0.
+    z = 0.
+    for i in Nd-1:-1:1
+        x *= ξ
+        y *= ξ
+        z *= ξ
+        x += convert(eltype(A), i) * A[i+1, 1]
+        y += convert(eltype(A), i) * A[i+1, 2]
+        z += convert(eltype(A), i) * A[i+1, 3]
+    end
+    return @SVector [x, y, z]
+end
+
+s(ξ, d::BoreholeDiscretization) = quadgk(η -> norm(dpath(η, d)), -1., ξ)[1]
+function normJ(η, segment::Int, d::BoreholeDiscretization)
+    @unpack segments = d
+    m = (segments[segment+1] - segments[segment])/2
+    c = (segments[segment+1] + segments[segment])/2
+    m * norm(dpath(m*η + c, d))
+end
+
+function f1(ξ, p::InternalModelParams, d::BoreholeDiscretization) 
+    @unpack β, δ, γ = p
+    sl = s(ξ, d)
+    exp(β*sl) * (cosh(γ*sl) - δ*sinh(γ*sl))
+end
+function f2(ξ, p::InternalModelParams, d::BoreholeDiscretization) 
+    @unpack β, β12, γ = p
+    sl = s(ξ, d)
+    exp(β*sl) * β12/γ * sinh(γ*sl)
+end
+function f3(ξ, p::InternalModelParams, d::BoreholeDiscretization) 
+    @unpack β, γ, δ = p
+    sl = s(ξ, d)
+    exp(β*sl) * (cosh(γ*sl) + δ*sinh(γ*sl))
+end
+function f4(ξ, p::InternalModelParams, d::BoreholeDiscretization) 
+    @unpack β, β1, β2, β12, γ, δ = p
+    sl = s(ξ, d)
+    exp(β*sl) * (β1*cosh(γ*sl) - (δ*β1 + β2*β12/γ)*sinh(γ*sl))
+end
+function f5(ξ, p::InternalModelParams, d::BoreholeDiscretization) 
+    @unpack β, β1, β2, β12, γ, δ = p
+    sl = s(ξ, d)
+    exp(β*sl) * (β2*cosh(γ*sl) + (δ*β2 + β1*β12/γ)*sinh(γ*sl))
+end
 
 ξseg(ξ′, u, segments) = (segments[u+1] - segments[u]) / 2 * ξ′ +  (segments[u+1] + segments[u]) / 2
 
@@ -81,3 +156,8 @@ function evaluate(ξ, coefs, bh_disc::BoreholeDiscretization, basis::LagrangeBas
         end
     end
 end
+
+η = [-1., 1.]
+p = [[0., 0., 0.], [0., 0., 100.]]
+
+bd = BoreholeDiscretization(η, p, [-1., 1.]) 

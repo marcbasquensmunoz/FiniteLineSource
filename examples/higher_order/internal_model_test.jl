@@ -5,9 +5,9 @@ N = 5
 H = 100.
 D = 0.
 segments = [-1., -0.6, 0.6, 1.]#[-1, -0.95, -0.9, -0.6, 0.6, 0.9, 0.95, 1.]
+bh_disc = BoreholeDiscretization([-1., 1.], [[0., 0., D], [0., 0., D+H]], segments) 
 
 basis = LagrangeBasis(N)
-bh_disc = BoreholeDiscretization(D, H, segments) 
 Np = basis.N * bh_disc.S
 
 mf = 0.05
@@ -18,7 +18,7 @@ R12 = -5.
 
 params = InternalModelParams(mf=mf, cpf=cpf, R11=R11, R22=R22, R12=R12)
 
-ξ_disc = reduce(vcat, [ξseg.(x, Ref(u), Ref(segments)) for u in 1:bh_disc.S])
+ξ_disc = reduce(vcat, [ξseg.(basis.x, Ref(u), Ref(segments)) for u in 1:bh_disc.S])
 
 Rp = (R11+R22)/(R11*R22)
 
@@ -36,27 +36,27 @@ f3_ξ = @. exp(β*s_ξ) * (cosh(γ*s_ξ) + δ*sinh(γ*s_ξ))
 f4_ξ = @. exp(β*s_ξ) * (β1*cosh(γ*s_ξ) - (δ*β1 + β2*β12/γ)*sinh(γ*s_ξ))
 f5_ξ = @. exp(β*s_ξ) * (β2*cosh(γ*s_ξ) + (δ*β2 + β1*β12/γ)*sinh(γ*s_ξ))
 
-G_Tin_Tout = (f1(1., params)+f2(1., params)) / (f3(1., params)-f2(1., params))
+G_Tin_Tout = (f1(1., params, bh_disc)+f2(1., params, bh_disc)) / (f3(1., params, bh_disc)-f2(1., params, bh_disc))
 
 ##################
 # Fluid profile
 ##################
 
-function g_out!(I, basis::LagrangeBasis, bh_disc::BoreholeDiscretization, params::InternalModelParams) 
+function g_out!(I, basis::LagrangeBasis, bh::BoreholeDiscretization, params::InternalModelParams) 
     @unpack x, N = basis
-    @unpack segments, L = bh_disc
+    @unpack segments = bh
     Np = size(I)[1]
 
-    Cf = 1 / (f3(1., params)-f2(1., params))
+    Cf = 1 / (f3(1., params, bh)-f2(1., params, bh))
     for i in 1:Np
         (v, n) = indices(i, N)
-        I[i] = Cf * L[v]/2 * quadgk(η -> (f4(-ξseg(η, v, segments), params) + f5(-ξseg(η, v, segments), params)) * ψ(η, n, basis), -1., 1.)[1] 
+        I[i] = Cf * quadgk(η -> (f4(-ξseg(η, v, segments), params, bh) + f5(-ξseg(η, v, segments), params, bh)) * ψ(η, n, basis) * normJ(η, v, bh), -1., 1.)[1] 
     end
 end
 
-function g_T!(I, f, basis::LagrangeBasis, bh_disc::BoreholeDiscretization) 
+function g_T!(I, f, basis::LagrangeBasis, bh::BoreholeDiscretization) 
     @unpack x, N = basis
-    @unpack segments, L = bh_disc
+    @unpack segments = bh
     Np = size(I)[1]
     for j in 1:Np
         for i in 1:Np
@@ -64,18 +64,18 @@ function g_T!(I, f, basis::LagrangeBasis, bh_disc::BoreholeDiscretization)
             (v, n) = indices(j, N)
             ξu = ξseg(x[m], u, segments)
             if v < u
-                I[i, j] = quadgk(η -> L[v]/2 * f(ξu - 1 - ξseg(η, v, segments)) * ψ(η, n, basis), -1., 1.)[1]
+                I[i, j] = quadgk(η -> f(ξu - 1 - ξseg(η, v, segments)) * ψ(η, n, basis) * normJ(η, v, bh), -1., 1.)[1]
             elseif u == v
                 ϕ(η) = (x[m]+1)/2 * η + (x[m]-1)/2
-                I[i, j] = quadgk(η -> L[v]/2 * (x[m]+1)/2 * f(ξu - 1 - ξseg(ϕ(η), v, segments)) * ψ(ϕ(η), n, basis), -1., 1.)[1]
+                I[i, j] = quadgk(η -> (x[m]+1)/2 * f(ξu - 1 - ξseg(ϕ(η), v, segments)) * ψ(ϕ(η), n, basis) * normJ(ϕ(η), v, bh), -1., 1.)[1]
             else 
                 I[i, j] = 0.
             end
         end
     end
 end
-g_T1!(I, basis::LagrangeBasis, bh_disc::BoreholeDiscretization, params::InternalModelParams) = g_T!(I, x -> f4(x, params), basis, bh_disc) 
-g_T2!(I, basis::LagrangeBasis, bh_disc::BoreholeDiscretization, params::InternalModelParams) = g_T!(I, x -> f5(x, params), basis, bh_disc) 
+g_T1!(I, basis::LagrangeBasis, bh::BoreholeDiscretization, params::InternalModelParams) = g_T!(I, x -> f4(x, params, bh), basis, bh) 
+g_T2!(I, basis::LagrangeBasis, bh::BoreholeDiscretization, params::InternalModelParams) = g_T!(I, x -> f5(x, params, bh), basis, bh) 
 
 Gout = zeros(Np)
 GT1 = zeros(Np, Np)
@@ -86,7 +86,7 @@ g_T1!(GT1, basis, bh_disc, params)
 g_T2!(GT2, basis, bh_disc, params) 
 
 
-Tb = ones(N*3)#vcat(8*ones(N*1), 10*ones(2*N))
+Tb = vcat(8*ones(N*1), 10*ones(2*N))
 Tin = 10.
 Tout = G_Tin_Tout*Tin + dot(Gout, Tb) 
 T1 =  f1_ξ .* Tin + f2_ξ .* Tout + GT1*Tb
