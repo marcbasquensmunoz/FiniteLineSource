@@ -23,41 +23,56 @@ function g_Q_T!(I, source::BoreholeDiscretization, target::BoreholeDiscretizatio
     nothing
 end
 
-function g_Tin_Q!(I, params::InternalModelParams, bh::BoreholeDiscretization, basis::LagrangeBasis)
+function g_Tin_Q!(I, internal::InternalModelParams, bh::BoreholeDiscretization, basis::LagrangeBasis)
     @unpack x, N = basis
     @unpack segments = bh
-    @unpack Rp = params
-    Cf = (f1(1, params, bh) + f2(1, params, bh))/(f3(1, params, bh)-f2(1, params, bh))
+    #@unpack Rp = params
+    @unpack Rb, R11Δ, R22Δ = internal
+    Cf = (f1(1, internal, bh) + f2(1, internal, bh))/(f3(1, internal, bh)-f2(1, internal, bh))
     Np = length(I)
     for i in 1:Np
         (u, m) = indices(i, N)
         ξ = ξseg(x[m], u, segments)
-        I[i] = -Rp/2 * (f1(ξ, params, bh) - f2(ξ, params, bh) +  Cf * (f2(ξ, params, bh) + f3(ξ, params, bh)))
+        #I[i] = -Rp/2 * (f1(ξ, internal, bh) - f2(ξ, internal, bh) +  Cf * (f2(ξ, internal, bh) + f3(ξ, internal, bh)))
+        I[i] = - ( (f1(ξ, internal, bh) + Cf * f2(ξ, internal, bh))/R11Δ + (-f2(ξ, internal, bh) + Cf * f3(ξ, internal, bh))/R22Δ )
     end
 end
 
-function g_T_Q!(I, params::InternalModelParams, bh::BoreholeDiscretization, basis::LagrangeBasis)
+function g_T_Q!(I, internal::InternalModelParams, bh::BoreholeDiscretization, basis::LagrangeBasis)
     @unpack x, N = basis
     @unpack segments = bh
+    @unpack Rb, R11Δ, R22Δ = internal
     Np = size(I)[1]
-    Cf = 1 / (f3(1., params, bh)-f2(1., params, bh))
-    R = params.Rp / 2
+    C = 1 / (f3(1., internal, bh) - f2(1., internal, bh))
+    #R = internal.Rp / 2
     for j in 1:Np
         for i in 1:Np
             (u, m) = indices(i, N)
             (v, n) = indices(j, N)
             ξu = ξseg(x[m], u, segments)
             ηv(η) = ξseg(η, v, segments)
-            if v < u
-                int = quadgk(η -> (Cf * (f2(ξu, params, bh) + f3(ξu, params, bh)) * (f4(-ηv(η), params, bh) + f5(-ηv(η), params, bh)) + f4(ξu - 1 - ηv(η), params, bh) - f5(ξu - 1 - ηv(η), params, bh)) * ψ(η, n, basis) * normJ(η, v, bh), -1., 1.)[1]
+            #=if v < u
+                int = quadgk(η -> (Cf * (f2(ξu, internal, bh) + f3(ξu, internal, bh)) * (f4(-ηv(η), internal, bh) + f5(-ηv(η), internal, bh)) + f4(ξu - 1 - ηv(η), internal, bh) - f5(ξu - 1 - ηv(η), internal, bh)) * ψ(η, n, basis) * normJ(η, v, bh), -1., 1.)[1]
                 I[i, j] = -R * int
             elseif u == v
                 ϕ(η) = (x[m]+1)/2 * η + (x[m]-1)/2
-                int = quadgk(η -> Cf * (f2(ξu, params, bh) + f3(ξu, params, bh)) * (f4(-ηv(η), params, bh) + f5(-ηv(η), params, bh)) * ψ(η, n, basis) * normJ(η, v, bh) + (x[m]+1)/2 * (f4(ξu - 1 - ηv(ϕ(η)), params, bh) - f5(ξu - 1 - ηv(ϕ(η)), params, bh)) * ψ(ϕ(η), n, basis) * normJ(ϕ(η), v, bh), -1., 1.)[1]
+                int = quadgk(η -> Cf * (f2(ξu, internal, bh) + f3(ξu, internal, bh)) * (f4(-ηv(η), internal, bh) + f5(-ηv(η), internal, bh)) * ψ(η, n, basis) * normJ(η, v, bh) + (x[m]+1)/2 * (f4(ξu - 1 - ηv(ϕ(η)), internal, bh) - f5(ξu - 1 - ηv(ϕ(η)), internal, bh)) * ψ(ϕ(η), n, basis) * normJ(ϕ(η), v, bh), -1., 1.)[1]
                 I[i, j] = (n == m ? 2R : 0) - R  * int
             else
-                int = quadgk(η -> (Cf * (f2(ξu, params, bh) + f3(ξu, params, bh)) * (f4(-ηv(η), params, bh) + f5(-ηv(η), params, bh))) * ψ(η, n, basis) * normJ(η, v, bh), -1., 1.)[1]
+                int = quadgk(η -> (Cf * (f2(ξu, internal, bh) + f3(ξu, internal, bh)) * (f4(-ηv(η), internal, bh) + f5(-ηv(η), internal, bh))) * ψ(η, n, basis) * normJ(η, v, bh), -1., 1.)[1]
                 I[i, j] = -R * int
+            end=#
+
+            F(η) = - C * ( f2(ξu, internal, bh) / R11Δ + f3(ξu, internal, bh) / R22Δ ) * ( f4(-ηv(η), internal, bh) + f5(-ηv(η), internal, bh) ) * ψ(η, n, basis) * normJ(η, v, bh)
+            if u == v
+                ϕ(η) = (x[m]+1)/2 * η + (x[m]-1)/2
+                F_self_s(η) = - (x[m]+1)/2 * (f4(ξu - 1 - ηv(ϕ(η)), internal, bh) / R11Δ - f5(ξu - 1 - ηv(ϕ(η)), internal, bh) / R22Δ) * ψ(ϕ(η), n, basis) * normJ(ϕ(η), v, bh)
+                I[i, j] = (n == m ? 1/Rb : 0) + quadgk(η -> F(η) + F_self_s(η), -1., 1.)[1]
+            elseif v < u
+                F_sts(η) = - (f4(ξu - 1 - ηv(η), internal, bh) / R11Δ - f5(ξu - 1 - ηv(η), internal, bh) / R22Δ) * ψ(η, n, basis) * normJ(η, v, bh)
+                I[i, j] = quadgk(η -> F(η) + F_sts(η), -1., 1.)[1]
+            else 
+                I[i, j] = quadgk(F, -1., 1.)[1]
             end
         end
     end

@@ -24,7 +24,7 @@ internal = InternalModelParams(mf=mf, cpf=cpf, R11Δ=R11Δ, R22Δ=R22Δ, R12Δ=R
 Tb = vcat(8*ones(N*1), 10*ones(2*N))
 Tin = 10.
 Tout, T1, T2 = fluid_profiles(Tin, Tb, bh_disc, internal, basis)
-q = (Tb - 1/2*(T1+T2)) * internal.Rp
+q = Tb / internal.Rb - T1 / internal.R11Δ - T2 / internal.R22Δ
 
 z = @. H/2 * (ξ_disc+1) + D
 scatter(T1, z, label="T1", yflip = true, xlimits=(0,15.))
@@ -33,7 +33,7 @@ plot!(Tb, z, label="Tb")
 
 scatter(q, z, label="q")
 
-Q_balance = (Tout-Tin)*cpf*mf 
+Q_balance = (Tout-Tin)*cpf*mf / H 
 Q_int = integrate_bh(q, bh_disc, basis)
 
 
@@ -59,8 +59,11 @@ g_T1!(GT1, basis, bh_disc, internal)
 g_T2!(GT2, basis, bh_disc, internal) 
 
 
-check_Tin = - (f1_ξ - f2_ξ + (f2_ξ + f3_ξ)*G_Tin_Tout ) * internal.Rp / 2
-check_G = -(GT1-GT2 + (f2_ξ + f3_ξ) * Gout' - 2*Diagonal(ones(Np))) * internal.Rp / 2
+#check_Tin = - (f1_ξ - f2_ξ + (f2_ξ + f3_ξ)*G_Tin_Tout ) * internal.Rp / 2
+#check_G = -(GT1-GT2 + (f2_ξ + f3_ξ) * Gout' - 2*Diagonal(ones(Np))) * internal.Rp / 2
+
+check_Tin = - ( (f1_ξ + G_Tin_Tout * f2_ξ) / internal.R11Δ + (-f2_ξ + G_Tin_Tout * f3_ξ) / internal.R22Δ )
+check_G = Diagonal(ones(Np)) / internal.Rb - (GT1 + f2_ξ * Gout') / internal.R11Δ - (-GT2 + f3_ξ * Gout') / internal.R22Δ 
 
 @show sum(abs.(check_Tin - GTinQ))
 @show sum(abs.(check_G - GTQ))

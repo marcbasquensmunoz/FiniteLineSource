@@ -6,14 +6,14 @@ using Plots
 kg = 3.
 rb = 0.1
 Δt = 30*24*3600.
-Nt = 1
+Nt = 100
 T0 = 10.
 
 constants = Constants(α=α, kg=kg, rb=rb, Δt=Δt)
 
 D = 0.
 H = 100.
-segments = [-1., 1.]#[-1, -0.95, -0.9, -0.6, 0.6, 0.9, 0.95, 1.]
+segments = [-1., -0.6, 0.6, 1.]#[-1, -0.95, -0.9, -0.6, 0.6, 0.9, 0.95, 1.]
 bh_disc = BoreholeDiscretization([-1., 1.], [[0., 0., D], [0., 0., D+H]], segments) 
 
 mf = 0.05
