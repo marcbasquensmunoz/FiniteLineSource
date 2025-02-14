@@ -135,15 +135,31 @@ function f3(ξ, p::InternalModelParams, d::BoreholeDiscretization)
     sl = s(ξ, d)
     exp(β*sl) * (cosh(γ*sl) + δ*sinh(γ*sl))
 end
-function f4(ξ, p::InternalModelParams, d::BoreholeDiscretization) 
+function f4(ξ1, ξ2, p::InternalModelParams, d::BoreholeDiscretization) 
     @unpack β, β1, β2, β12, γ, δ = p
-    sl = s(ξ, d)
+    sl = s(ξ1, d) - s(ξ2, d)
     exp(β*sl) * (β1*cosh(γ*sl) - (δ*β1 + β2*β12/γ)*sinh(γ*sl))
 end
-function f5(ξ, p::InternalModelParams, d::BoreholeDiscretization) 
+function f5(ξ1, ξ2, p::InternalModelParams, d::BoreholeDiscretization) 
     @unpack β, β1, β2, β12, γ, δ = p
-    sl = s(ξ, d)
+    sl = s(ξ1, d) - s(ξ2, d)
     exp(β*sl) * (β2*cosh(γ*sl) + (δ*β2 + β1*β12/γ)*sinh(γ*sl))
+end
+
+function f1p2(ξ, p::InternalModelParams, d::BoreholeDiscretization; C1 = 1., C2 = 1.) 
+    @unpack β, β12, γ, δ = p
+    sl = s(ξ, d)
+    exp(β*sl) * ( C1 * cosh(γ*sl) + (C2 * β12/γ - C1 * δ ) * sinh(γ*sl))
+end
+function f2p3(ξ, p::InternalModelParams, d::BoreholeDiscretization; C2 = 1., C3 = 1.) 
+    @unpack β, β12, γ, δ = p
+    sl = s(ξ, d)
+    exp(β*sl) * ( C3 * cosh(γ*sl) + (C2 * β12/γ + C3 * δ ) * sinh(γ*sl))
+end
+function f4p5(ξ1, ξ2, p::InternalModelParams, d::BoreholeDiscretization; C4 = 1., C5 = 1.) 
+    @unpack β, β1, β2, β12, γ, δ = p
+    sl = s(ξ1, d) - s(ξ2, d)
+    exp(β*sl) * ((C4*β1+C5*β2)*cosh(γ*sl) + (δ*(C5*β2-C4*β1) + β12/γ*(C5*β1-C4*β2) )*sinh(γ*sl))
 end
 
 ξseg(ξ′, u, segments) = (segments[u+1] - segments[u]) / 2 * ξ′ +  (segments[u+1] + segments[u]) / 2
