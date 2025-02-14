@@ -41,14 +41,15 @@ end
 @with_kw struct InternalModelParams{T <: Number} @deftype T
     mf
     cpf
-    R11
-    R22
-    R12
-    Rp = (R11+R22)/(R11*R22)
+    R11Δ
+    R22Δ
+    R12Δ
+    Rp = (R11Δ+R22Δ)/(R11Δ*R22Δ)
+    Rb = (R11Δ*R22Δ)/(R11Δ+R22Δ)
 
-    β1 = 1/(mf*cpf*R11)
-    β2 = 1/(mf*cpf*R22)
-    β12 = 1/(mf*cpf*R12)
+    β1 = 1/(mf*cpf*R11Δ)
+    β2 = 1/(mf*cpf*R22Δ)
+    β12 = 1/(mf*cpf*R12Δ)
     
     β = (β2-β1)/2
     γ = sqrt((β2+β1)^2 / 4 + (β2+β1)*β12)
@@ -157,7 +158,14 @@ function evaluate(ξ, coefs, bh_disc::BoreholeDiscretization, basis::LagrangeBas
     end
 end
 
-η = [-1., 1.]
-p = [[0., 0., 0.], [0., 0., 100.]]
+function ξ_discretization(bh::BoreholeDiscretization, basis::LagrangeBasis)
+    @unpack segments, S = bh
+    @unpack x = basis
+    reduce(vcat, [ξseg.(x, Ref(u), Ref(segments)) for u in 1:S])
+end
 
-bd = BoreholeDiscretization(η, p, [-1., 1.]) 
+function integrate_bh(f, bh::BoreholeDiscretization, basis::LagrangeBasis)
+    gQ = zeros(length(f))
+    g_Q!(gQ, bh, basis)
+    dot(gQ, f)    
+end
