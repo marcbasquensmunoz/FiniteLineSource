@@ -43,4 +43,4 @@ end
 
 struct EmptyContainer <: ComputationContainers end
 
-initialize_containers(::Setup, dps) = ([EmptyContainer()], ones(Int64, length(dps)))
+initialize_containers(::Setup, dps) = (ones(Int64, length(dps)), [EmptyContainer()])
