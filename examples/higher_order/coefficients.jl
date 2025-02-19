@@ -21,6 +21,24 @@ function g_Q_T!(I, source::BoreholeDiscretization, target::BoreholeDiscretizatio
     nothing
 end
 
+function g_Q_T_NH!(I, source::BoreholeDiscretization, target::BoreholeDiscretization, basis::LagrangeBasis, constants::Constants)
+    @unpack x, N = basis
+    @unpack S = source
+    @unpack kg, rb, Δt = constants
+    Δt̃ = α*Δt/rb^2
+
+    sr = source == target ? [rb, 0., 0.] : [0., 0., 0.]
+    Np = N*S
+    for j in 1:Np
+        for i in 1:Np
+            (u, m) = indices(i, N) # target
+            (v, n) = indices(j, N) # source
+            dist(ξ) = r(path(ξ, v, source) + sr, path(x[m], u, target))
+            I[i, j] = 1 / (4π*kg) * quadgk(ξ -> erfc(dist(ξ) / sqrt(4rb^2*Δt̃)) / dist(ξ) * ψ(ξ, n, basis) * normJ(ξ, v, source) , -1., 1.)[1] 
+        end
+    end
+end
+
 function g_Tin_Q!(I, internal::InternalModelParams, bh::BoreholeDiscretization, basis::LagrangeBasis)
     @unpack x, N = basis
     @unpack segments = bh
