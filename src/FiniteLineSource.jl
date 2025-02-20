@@ -15,6 +15,7 @@ using StaticArrays
 using SpecialFunctions
 using TaylorDiff
 using Roots
+using DataStructures
 
 include("nonhistory/interface.jl")
 include("nonhistory/objects.jl")
@@ -48,10 +49,11 @@ export compute_self_response
 include("continuous/continuous.jl")
 export compute_coefficients_through_history, precompute_matrices, legendre_coeffs
 
-include("nonhistory/block_method.jl")
+include("causal_non_history/block_method.jl")
+include("causal_non_history/point_to_point.jl")
 export N_bound, choose_blocks, taylor, N_bound
 export compute_ζ_points, compute_N
 export compute_ζ_points_line, compute_N_line, LineKernelParams, compute_kernel_line
 export LineToLineKernelParams, compute_kernel_double_line
-
+export prepare_containers_ptp, evolve_ptp!
 end

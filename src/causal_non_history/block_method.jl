@@ -20,11 +20,10 @@ Computes the blocks to be used
 """
 function choose_blocks(Nr, Nt; p = 10)
     Nmin = minimum(Nr)
-    Nmax = maximum(Nr)
     Ncurrent = Nmin
     N = zeros(Int, 0)
 
-    while Ncurrent < Nt #|| length(N) <= 3
+    while Ncurrent < Nt
         push!(N, Int(floor(Ncurrent)))
         Ncurrent *= p
     end
@@ -32,7 +31,7 @@ function choose_blocks(Nr, Nt; p = 10)
     sort!(N)
     push!(N, Nt)
 
-    for (na, nb) in zip(N[1:end-1], N[2:end])
+    @views for (na, nb) in zip(N[1:end-1], N[2:end])
         if isempty(filter(n -> n in na:nb, Nr)) 
             deleteat!(N, findfirst(x->x==na, N))
         end
@@ -53,50 +52,6 @@ function compute_N_line(σ, D, H, z, ϵ, params::Constants)
     @unpack Δt, α, kg = params
     f(N) = quadgk(zp -> erfc(sqrt(σ^2 + (zp - z)^2) / sqrt(4α * Δt * N))/(4*π*kg*sqrt(σ^2 + (zp - z)^2)), D, D+H)[1] - ϵ
     Int(floor(find_zero(f, 10σ^2)))
-end
-
-
-"""
-Compute the number of steps N that can be skipped for a given distance r
-"""
-function compute_N(r, ϵ, params::Constants) 
-    @unpack Δt, α, kg = params
-    Int(floor((r / sqrt(4α) / erfcinv(4*π*r*kg*ϵ))^2/Δt))
-end
-
-"""
-Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
-"""
-function compute_ζ_points(N, No, ϵ, Q, n, params::Constants, x, w)
-    @unpack Δt, α, rb = params
-    Δt̃ = Δt*α/rb^2
-
-    heatwave(r) = erfc(r/sqrt(4α*N*Δt)) / r - ϵ
-    r = find_zero(heatwave, sqrt(N))
-    a = 0.
-    b = sqrt(-log(ϵ/Q) / (N*Δt̃))
-    r̃ = r/rb
-
-    guide(ζ) = (exp(-ζ^2*N*Δt̃) + 100 * exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
-    #guide(ζ) = exp(-ζ^2*N*Δt̃) * sin(r̃*ζ) / (r*ζ) * (1 -  exp(-ζ^2*Δt̃))
-    _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
-    sort!(segbuf, by=s->s.a)
-    n_seg = length(segbuf)
-
-    Nζ = n_seg*n
-
-    ζ = zeros(Nζ)
-    W = zeros(Nζ)
-    #x, w = gausslegendre(n)
-
-    for (i, segment) in enumerate(segbuf)
-        m = (segment.b-segment.a)/2
-        c = (segment.b+segment.a)/2 
-        @. ζ[(i-1)*n+1:i*n] = m*x + c
-        @. W[(i-1)*n+1:i*n] = m * w
-    end
-
-    return ζ, W
 end
 
 function taylor(r, σ, m)
