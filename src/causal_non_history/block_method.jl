@@ -1,19 +1,36 @@
 
+struct BlockMethod{T <: Number}
+    ζ::Vector{T}
+    F::Vector{T}
+    expt::Vector{T}
+    expNin::Vector{T}
+    expNout::Vector{T}
+    HM::Array{T, 3}
+    load_delays::Vector{CircularBuffer{T}}
+    load_buffer::CircularBuffer{T}
+    ranges::Vector{UnitRange{Int}}
+    Kranges::Vector{UnitRange{Int}}
+    K_min::Matrix{Int}
+    qinaux::Vector{T}
+    qoutaux::Vector{T}
+end
+
 """
 Computes the blocks to be used
 """
-function choose_blocks(Nr; p = 10)
+function choose_blocks(Nr, Nt; p = 10)
     Nmin = minimum(Nr)
     Nmax = maximum(Nr)
     Ncurrent = Nmin
     N = zeros(Int, 0)
 
-    while Ncurrent < 10*Nmax || length(N) <= 3
+    while Ncurrent < Nt #|| length(N) <= 3
         push!(N, Int(floor(Ncurrent)))
         Ncurrent *= p
     end
     !(Nmin in N) && push!(N, Nmin)
     sort!(N)
+    push!(N, Nt)
 
     for (na, nb) in zip(N[1:end-1], N[2:end])
         if isempty(filter(n -> n in na:nb, Nr)) 
@@ -50,7 +67,7 @@ end
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
-function compute_ζ_points(N, No, ϵ, Q, n, params::Constants)
+function compute_ζ_points(N, No, ϵ, Q, n, params::Constants, x, w)
     @unpack Δt, α, rb = params
     Δt̃ = Δt*α/rb^2
 
@@ -63,14 +80,14 @@ function compute_ζ_points(N, No, ϵ, Q, n, params::Constants)
     guide(ζ) = (exp(-ζ^2*N*Δt̃) + 100 * exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
     #guide(ζ) = exp(-ζ^2*N*Δt̃) * sin(r̃*ζ) / (r*ζ) * (1 -  exp(-ζ^2*Δt̃))
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
-    sort!(segbuf, by=x->x.a)
+    sort!(segbuf, by=s->s.a)
     n_seg = length(segbuf)
 
     Nζ = n_seg*n
 
     ζ = zeros(Nζ)
     W = zeros(Nζ)
-    x, w = gausslegendre(n)
+    #x, w = gausslegendre(n)
 
     for (i, segment) in enumerate(segbuf)
         m = (segment.b-segment.a)/2
