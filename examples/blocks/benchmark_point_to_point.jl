@@ -1,9 +1,9 @@
-using FiniteLineSource: Constants, precompute_parameters, compute_integral_throught_history!, PointToPoint, prepare_containers_ptp, evolve_ptp!
+using FiniteLineSource: convolve_step, Constants, precompute_parameters, compute_integral_throught_history!, PointToPoint, prepare_containers_ptp, evolve!
 using BenchmarkTools
 
 ϵ = 1e-6
 Δt = 3600.
-Nt = 100000
+Nt = 1000
 
 bn = 2
 bm = 1
@@ -30,25 +30,25 @@ positions = [(B*(i-1)^2, B*(j-1)^2, B*(k-1)^2) for i in 1:bn for j in 1:bm for k
 # Block method
 N, block = prepare_containers_ptp(positions, ϵ, Nt, params);
 Ib = zeros(length(positions), Nt)
-evolve_ptp!(Ib, q, block)
+evolve!(Ib, q, block)
 
-# Original non-history
-Inh = zeros(Nt)
+# Convolution
 setup = PointToPoint(r = B)
-precomp = precompute_parameters(setup, params=params)
-compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=params)
+C = convolve_step(q, setup; params=params)
 
 # Error
-err = @. abs(Ib[1, :] - Inh)
+err = @. abs(Ib[1, :] - C)
 
-#####################################
-# Performance analysis
-#####################################
+#######################################
+# Performance analysis with non-history
+#######################################
+
+Inh = zeros(Nt)
 
 # Precomputation
-@btime prepare_containers_ptp(positions, ϵ, Nt, params);
-@btime precompute_parameters(setup, params=params)
+block = @btime prepare_containers_ptp(positions, ϵ, Nt, params);
+precomp = @btime precompute_parameters(setup, params=params);
 
 # Simulation 
-@btime evolve_ptp!(Ib, q, block)
+@btime evolve!(Ib, q, block)
 @btime compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=params)

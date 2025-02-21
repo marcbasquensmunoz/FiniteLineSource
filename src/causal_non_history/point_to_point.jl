@@ -128,31 +128,3 @@ function prepare_containers_ptp(positions, ϵ, Nt, params)
 
     N, BlockMethod(ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, ranges, Kranges, K_min, qin, qout)
 end
-    
-function evolve_ptp!(I, q, block::BlockMethod)
-    @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, ranges, Kranges, K_min, qinaux, qoutaux = block
-
-    for (nt, qt) in enumerate(q)
-        current_q = load_buffer[1]
-        push!(load_buffer, qt)
-
-        for i in eachindex(load_delays)
-            qin = current_q
-            qout = load_delays[i][1]
-            push!(load_delays[i], qin)
-            current_q = qout
-            @. qinaux[ranges[i]] = qin
-            @. qoutaux[ranges[i]] = qout
-        end
-        @. F = expt * F + (qinaux * expNin - qoutaux * expNout)
-
-        bh_indices = 1:size(block.K_min)[1]
-        for target in bh_indices
-            for source in bh_indices
-                if source == target continue end
-                range = Kranges[K_min[source, target]]
-                @views I[target, nt] += dot(F[range], HM[range, target, source])
-            end
-        end
-    end
-end

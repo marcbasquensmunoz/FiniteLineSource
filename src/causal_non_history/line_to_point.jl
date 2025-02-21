@@ -1,0 +1,369 @@
+
+compute_distance_2D(s, t) = sqrt((s.x - t.x)^2 + (s.y - t.y)^2)
+
+struct N_Model{M, T <: Number}
+    model::M
+    mins::Vector{T}
+    norms::Vector{T}
+    aux::Vector{Float32}
+end
+function eval(nmodel, ϵ, σ, a, b)
+    @unpack model, mins, norms, aux = nmodel
+    aux[1] = (-log10(Float32(ϵ)) - mins[1]) / norms[1]
+    aux[2] = (log(Float32(σ)) - mins[2]) / norms[2]
+    aux[3] = (log(Float32(a)) - mins[3]) / norms[3]
+    aux[4] = (log(Float32(b)) - mins[4]) / norms[4]
+    Float64(model(aux)[1])
+end
+
+function load_nmodel()
+    k = 32
+    model = Chain(
+        Dense(4 => k, relu),   
+        Dense(k => k, relu),   
+        Dense(k => 1)
+    )
+
+    mins = Float32[4.0, 0.0, 0.6931471824645996, 0.6931471824645996]
+    norms = Float32[8.0, 6.907755374908447, 10.819777965545654, 13.122363567352295] 
+    model_state = JLD2.load("N_bound.jld2", "model_state")
+    Flux.loadmodel!(model, model_state)
+    N_Model(model, mins, norms, zeros(Float32, 4))
+end
+
+"""
+Compute the number of steps N that can be skipped for a line to point
+"""
+function compute_N_line(ϵ, setup::SegmentToPoint, params::Constants) 
+    @unpack σ, D, H, z = setup
+    @unpack α, kg, Δt = params
+    f(N) = quadgk(zp -> erfc(sqrt(σ^2 + (zp - z)^2) / sqrt(4α * Δt * N))/(4*π*kg*sqrt(σ^2 + (zp - z)^2)), D, D+H)[1] - ϵ
+    problem = ZeroProblem(f, 10σ^2)
+    sol = solve(problem)
+    Int(floor(sol))
+end
+
+"""
+Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
+"""
+function compute_ζ_points_line!(ζ, W, N, No, ϵ, n, D, H, z, params::Constants, nmodel)
+    @unpack Δt, α, rb, kg, Δt̃  = params
+
+    heatwave(σ) = quadgk(zp -> erfc(sqrt(σ^2 + (zp - z)^2) / sqrt(4α * Δt * N))/(4*π*kg*sqrt(σ^2 + (zp - z)^2)), D, D+H)[1] - ϵ
+    problem = ZeroProblem(heatwave, sqrt(N))
+    σ = solve(problem)
+
+    z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2)))
+
+    a = 0.
+    f(b) = 2ϵ/z_int - (gamma(0, b^2*N*Δt̃) - gamma(0, b^2*(N+1)*Δt̃))
+    problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
+    b = solve(problem)
+    #=if b == 0
+        b = sqrt(-log(ϵ) / (N*Δt̃))
+    end
+    =#
+
+    setup = SegmentToPoint(D=D, H=H, z=z, σ=σ)
+
+    Nl = Int(ceil(-log10(ϵ))) * 20
+    xb, wb = gausslegendre(Nl+1) 
+    Pb = zeros(Nl+1, Nl+1)
+    for s in 1:Nl+1
+        @inbounds @views collectPl!(Pb[:, s], xb[s], lmax=Nl)
+        @inbounds @views @. Pb[:, s] *= wb[s]
+    end
+    Xb = zeros(Nl+1)
+    aux = zeros(Nl+1)
+
+    int_sin(ζ) = compute_kernel_line(LineKernelParams(setup, ζ/rb, ϵ, nmodel), x1=xb, x2=xb, X1=Xb, X2=Xb, P1=Pb, P2=Pb, f1=aux, f2=aux)
+    #int_sin(ζ) = compute_kernel_line(ζ, rb, setup, x=xb, X=Xb, P=Pb, f=aux, atol=ϵ) 
+
+    guide(ζ) = (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * int_sin(ζ) * (1 - exp(-ζ^2*Δt̃)) / ζ
+    _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
+    sort!(segbuf, by=x->x.a)
+    n_seg = length(segbuf)
+
+    Nζ = n_seg*n
+    Hs = Int(floor(n/2))
+    p = n%2
+
+    append!(ζ, zeros(Nζ))
+    append!(W, zeros(Nζ))
+    x, _, w = QuadGK.cachedrule(Float64, n)
+
+    for (i, segment) in enumerate(segbuf)
+        m = (segment.b-segment.a)/2
+        c = (segment.b+segment.a)/2 
+        @inbounds @views @. ζ[end-(n_seg-i+1)*n+1:end-(n_seg-i)*n-Hs] = m * x[2:2:end-1+p] + c
+        @inbounds @views @. ζ[end-(n_seg-i+1)*n+1+Hs+p:end-(n_seg-i)*n] = -m * x[end-1-p:-2:2] + c
+        @inbounds @views @. W[end-(n_seg-i+1)*n+1:end-(n_seg-i)*n-Hs] = m * w
+        @inbounds @views @. W[end-(n_seg-i+1)*n+1+Hs+p:end-(n_seg-i)*n] = m * w[end-p:-1:1]
+    end
+    return Nζ
+end
+
+function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X1=nothing, X2=nothing, P1=nothing, P2=nothing, f1=nothing, f2=nothing)
+    @unpack r1, r2, r3, rs, ω, σ, ϵ, n1, n2 = params
+
+    h(r) = r < r2 ? 2. : 1.
+    I_div = 0.
+    I_osc = 0.
+
+    if r1 == σ
+        #@info "Computing Is"
+        mult = r1 == r2 ? 1. : 2.
+        C = mult * sin(σ*ω)
+        h_reg(r) = r == σ ? 0. : (sin(r*ω) * h(r) - C) / sqrt(r^2-σ^2)
+        # We could do the integration vectorized in ω
+        I1, _ = quadgk(h_reg, r1, rs, atol=ϵ/3)
+        I2 = C * acoth(rs/sqrt(rs^2-r1^2))
+        I_div = I1 + I2
+    end
+
+    n1 = length(X1) - 1
+    if r1 != r2
+        #@info "Computing I2"
+        m1 = (r2-rs)/2
+        c1 = (r2+rs)/2
+        @. X1 = m1*x1 + c1
+
+        @. f1 = 2. / sqrt(abs(X1^2-σ^2))
+        besselj!(X1, 1/2:(n1+1/2), m1*ω)
+        @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
+
+        I_osc = sqrt(m1*π/(2ω)) * dot(X1, P1, f1) # This version creates less allocations, but runs slower
+        #I_osc += sqrt(m1*π/(2ω)) * X1' * P1 * f1
+
+        #=
+        rs1 = rs + 1.
+
+        m1 = (rs1-rs)/2
+        c1 = (rs1+rs)/2
+        @. X1 = m1*x1 + c1
+        @. f1 = 2. / sqrt(abs(X1^2-σ^2))
+        besselj!(X1, 1/2:(n1+1/2), m1*ω)
+        @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
+        I_osc += sqrt(m1*π/(2ω)) * X1' * P1 * f1
+
+        m1 = (r2-rs1)/2
+        c1 = (r2+rs1)/2
+        @. X1 = m1*x1 + c1
+        @. f1 = 2. / sqrt(abs(X1^2-σ^2))
+        besselj!(X1, 1/2:(n1+1/2), m1*ω)
+        @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
+        I_osc += sqrt(m1*π/(2ω)) * X1' * P1 * f1
+        =#
+    end
+
+    n2 = length(X2) - 1
+
+    if r2 != r3    
+        #@info "Computing I1"
+        rl = r1 == σ ? max(rs, r2) : r2
+        m2 = (r3-rl)/2
+        c2 = (r3+rl)/2
+        @. X2 = m2*x2 + c2
+
+        @. f2 = 1. / sqrt(X2^2-σ^2)
+        besselj!(X2, 1/2:(n2+1/2), m2*ω)
+        @. X2 = X2 * imag(exp(im*ω*c2) * im^(0:n2)) * (2(0:n2)+1)
+        I_osc += sqrt(m2*π/(2ω)) * X2' * P2 * f2
+    end
+
+    I_div + I_osc
+end
+
+#=
+function compute_kernel_line(ζ, rb, setup::SegmentToPoint; x, X, P, f, atol=1e-8)
+    @unpack D, H, z, σ = setup
+    rmin = σ
+    rB = sqrt(σ^2 + (z - D - H)^2 )
+    rT = sqrt(σ^2 + (z - D)^2     )
+    
+    r1 = (D < z && z < D+H) ? rmin : min(rB, rT)
+    r2 = min(rB, rT)
+    r3 = max(rB, rT)
+
+    ω = ζ/rb
+    h(r) = r < r2 ? 2. : 1.
+
+    split = r1
+    I_div = 0.
+
+    if r1 == σ
+        split = r1 + min(4π/ω, (r3-r1)*0.1)
+        mult = r1 == r2 ? 1. : 2.
+        C = mult * sin(σ*ω)
+        h_reg(r) = r == σ ? 0. : (sin(r*ω) * h(r) - C) / sqrt(r^2-σ^2)
+        # We could do the integration vectorized in ω
+        I1, E, count = quadgk_count(h_reg, r1, split, atol=atol)
+        #@show E, count
+        I2 = C * acoth(split/sqrt(split^2-r1^2))
+        I_div = I1 + I2
+    end
+    #@show split, r3
+
+    m = (r3-split)/2
+    c = (r3+split)/2
+
+    n = length(x)-1
+    @. X = m*x + c
+    @. f = h(X) / sqrt(X^2-σ^2)
+
+    besselj!(X, 1/2:(n+1/2), m*ω)
+    @. X = X * imag(exp(im*ω*c) * im^(0:n)) * (2(0:n)+1)
+
+    # This version creates less allocations, but runs 6 μs slower
+    #I_osc = sqrt(m*π/(2ω)) * dot(X, P, f)
+    I_osc = sqrt(m*π/(2ω)) * X' * P * f
+    I_div + I_osc
+end
+=#
+
+
+function bakhalov_discretization(N, setup, params::Constants)
+    @unpack D, H, z = setup
+    @unpack Δt̃, rb, kg = params
+    σ = rb
+    n = 10
+
+    z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2)))
+    a = 0.
+    b = find_zero(bb -> 2ϵ/(z_int*rb) - N * (gamma(0, bb^2*Δt̃) - gamma(0, bb^2*2*Δt̃)), -log(ϵ) / (2N*Δt̃))
+
+    guide(ζ) = (1 + exp(-ζ^2*Δt̃*N))* (1 - exp(-ζ^2*Δt̃)) / ζ
+    _, _, segments = quadgk_segbuf(guide, a, b)
+    dps = @views [DiscretizationParameters(s.a, s.b, n) for s in segments]
+    x  = reduce(vcat, (dp.x for dp in dps))
+    w  = reduce(vcat, [FiniteLineSource.precompute_coefficients(setup, dp=dp, params=params, containers=FiniteLineSource.EmptyContainer()) for (i, dp) in enumerate(dps)])
+    fx = zeros(sum([dp.n+1 for dp in dps]))
+    perm = sortperm(x)
+
+    expt = @. exp(-x^2 * Δt̃)
+    exptout = @. exp(-x^2 * N * Δt̃)
+    Ic = log((z-D + sqrt(σ^2 + (z-D)^2))/(z-D-H + sqrt(σ^2 + (z-D-H)^2))) /  (4π * kg)
+    Icout = quadgk(zp -> erf(sqrt(rb^2 + (zp - z)^2)/rb/sqrt(4*N*Δt̃)) / sqrt(rb^2 + (zp - z)^2), D, D+H)[1] / (4π * kg)
+
+    x[perm], w[perm], fx, expt, exptout, Ic, Icout
+end
+
+function prepare_containers_ltp(sources, ϵ, Nt, params::Constants, nmodel::N_Model)
+    @unpack Δt, α, rb, kg, Δt̃ = params
+
+    n = 10
+    Ns = length(sources)
+    # Evaluation points 
+    # DO NOT USE FOR SELF-RESPONSE
+    distances = zeros(Ns, Ns)
+    NR = zeros(Int, Ns, Ns)
+    K_min = zeros(Int, Ns, Ns)
+
+    for j in 1:Ns
+        for i in 1:j-1
+            source = sources[i]
+            target = sources[j]
+            σ = compute_distance_2D(source, target)
+            setup = SegmentToPoint(D=source.D, H=source.H, z=target.D + target.H / 2 , σ=σ)
+            N_r = compute_N_line(ϵ, setup, params)
+            distances[i, j] = σ
+            distances[j, i] = σ
+            NR[i, j] = N_r
+            NR[j, i] = N_r
+        end
+    end
+    
+    Nr = filter!(e -> e != 0, unique(NR))
+    N = choose_blocks(Nr, Nt, p = 10)
+    K = length(N) - 1
+
+    for j in 1:Ns
+        for i in 1:j-1
+            Km = findlast(x -> x <= NR[i, j], N)
+            K_min[i, j] = Km
+            K_min[j, i] = Km
+        end
+    end
+   
+    ζ = zeros(0)
+    W = zeros(0)
+    indices = zeros(Int64, K+1)
+
+    D_eff = sum([source.D for source in sources])/length(sources)
+    H_eff = sum([source.H for source in sources])/length(sources)
+    z_eff = D_eff + H_eff/2
+
+    for i in 1:K
+        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, n, D_eff, H_eff, z_eff, params, nmodel)
+        @views indices[i+1:end] .+= N_block
+    end
+
+    @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
+    @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
+
+    #sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = bakhalov_discretization(10, setup)
+    
+    # Preallocate objects
+    F = zeros(length(ζ))
+    expt = @. exp(-ζ^2*Δt̃)
+    expNin = zeros(length(ζ))
+    expNout = zeros(length(ζ))
+
+    for i in 1:K
+        @inbounds @. @views expNin[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i]*Δt̃)
+        if i < K
+            @inbounds @. @views expNout[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i+1]*Δt̃)
+        end
+    end
+
+    load_delays = [CircularBuffer{Float64}(N[i+1] - N[i]) for i in 1:K]
+    load_buffer = CircularBuffer{Float64}(N[1])
+    fill!(load_buffer, 0.)
+    for load_delay in load_delays
+        fill!(load_delay, 0.)
+    end
+
+    bins = [10, 20, 30, 40, 50, 60, 70, 80, 100, 125, 150, 175, 200, 250]
+    X, Fx, PP, XT = create_bin_containers(bins)
+
+    HM = zeros(length(ζ), length(sources), length(sources))
+
+    C = 1 / (2π^2*kg)
+
+    for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
+        σ = i == j ? rb : distances[i, j]
+        source = sources[j]
+        setup = SegmentToPoint(D=source.D, H=source.H, z=source.D + source.H/2, σ=σ)
+        lineparams = LineKernelParams(setup, ζζ/rb, ϵ, nmodel)
+        bin1 = FiniteLineSource.get_bin(lineparams.n1, bins)
+        bin2 = FiniteLineSource.get_bin(lineparams.n2, bins)
+        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_line(lineparams; x1=X[bin1], x2=X[bin2], X1=XT[bin1], X2=XT[bin2], P1=PP[bin1], P2=PP[bin2], f1=Fx[bin1], f2=Fx[bin2])
+        @inbounds HM[k, j, i] = HM[k, i, j]
+    end
+
+    qin = zeros(length(ζ))
+    qout = zeros(length(ζ))
+
+    BlockMethod(
+        ζ, 
+        F, 
+        expt, 
+        expNin, 
+        expNout, 
+        HM, 
+        load_delays, 
+        load_buffer, 
+        ranges, 
+        Kranges, 
+        K_min, 
+        qin, 
+        qout,
+        #=sr_ζ,
+        sr_w,
+        sr_F,
+        sr_expt,
+        sr_expNout,
+        sr_Ic,
+        sr_Icout=#
+    )
+end

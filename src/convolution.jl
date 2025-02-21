@@ -16,7 +16,7 @@ function convolve_step(q, model::Setup; params::Constants)
     q = diff([0; q])
     t = Δt:Δt:Δt*length(q)
     response = step_response.(t, Ref(model), Ref(params))
-    return conv(q, response)[1:length(q)]
+    return DSP.conv(q, response)[1:length(q)]
 end
 
 # Point to point

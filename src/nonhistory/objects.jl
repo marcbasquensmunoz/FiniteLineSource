@@ -5,6 +5,8 @@
     kg = 3.
     Δt = 3600.
 
+    Δt̃ = α*Δt/rb^2
+
     b = 10.
     line_points::Vector{Int} = [30, 30, 30]
     line_limits::Vector{T} = [0., 0.4, 0.6, 1.]

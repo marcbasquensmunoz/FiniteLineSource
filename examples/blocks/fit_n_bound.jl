@@ -70,27 +70,6 @@ plot(bb, res)
 scatter!(vb, min_n[2, 1, 4, :])
 
 
-
-
-struct N_Model{M, T <: Number}
-    model::M
-    mins::Vector{T}
-    norms::Vector{T}
-    aux::Vector{Float32}
-end
-function eval(nmodel::N_Model, ϵ, σ, a, b)
-    @unpack model, mins, norms = nmodel
-    model(Float32[(-log10(ϵ) - mins[1]) / norms[1], (log(σ) - mins[2]) / norms[2], (log(a) - mins[3]) / norms[3], (log(b) - mins[4]) / norms[4]])[1]
-end
-
-nmodel = N_Model(model, mins, norms, zeros(Float32, 4))
-
-
-
-Profile.Allocs.clear()
-@time Profile.Allocs.@profile sample_rate=1 eval(nmodel, 1e-6, 1., 2., 10.)
-PProf.Allocs.pprof(from_c=false)
-
 # Save the model
 #=
 model_state = Flux.state(model)
