@@ -47,84 +47,27 @@ function compute_ζ_points!(ζ, W, N, No, ϵ, Q, n, params::Constants)
     return Nζ
 end
 
-function prepare_containers_ptp(positions, ϵ, Nt, params)
-    @unpack Δt, α, rb, kg = params
-    Δt̃ = Δt*α/rb^2
-    n = 10
+function compute_distance(::PointToPoint, source, target, params, ϵ)
+    r = compute_distance_3D(source, target)
+    N_r = compute_N(r, ϵ, params)
+    r, N_r
+end
 
-    Ns = length(positions)
-    # Evaluation points 
-    # DO NOT USE FOR SELF-RESPONSE
-    distances = zeros(Ns, Ns)
-    NR = zeros(Int, Ns, Ns)
-    K_min = zeros(Int, Ns, Ns)
-
-    for j in 1:Ns
-        for i in 1:j-1
-            r = compute_distance_3D(positions[i], positions[j])
-            N_r = compute_N(r, ϵ, params)
-            distances[i, j] = r
-            distances[j, i] = r
-            NR[i, j] = N_r
-            NR[j, i] = N_r
-        end
-    end
-
-    Nr = filter!(e -> e != 0, unique(NR))
-    N = choose_blocks(Nr, Nt, p = 10)
+function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, n, ϵ, constants, nmodel)
     K = length(N) - 1
-
-    for j in 1:Ns
-        for i in 1:j-1
-            Km = findlast(x -> x <= NR[i, j], N)
-            K_min[i, j] = Km
-            K_min[j, i] = Km
-        end
-    end
-
-    ζ = zeros(0)
-    W = zeros(0)
-    indices = zeros(Int64, K+1)
-
     for i in 1:K
-        N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, 1., n, params)
+        N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, 1., n, constants)
         @views indices[i+1:end] .+= N_block
     end
+end
 
-    @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
-    @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
-
-    # Preallocate objects
-    F = zeros(length(ζ))
-    expt = @. exp(-ζ^2*Δt̃)
-    expNin = zeros(length(ζ))
-    expNout = zeros(length(ζ))
-    for i in 1:K
-        @. @views expNin[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i]*Δt̃)
-        if i < K
-            @. @views expNout[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i+1]*Δt̃)
-        end
-    end
-
-    load_delays = [CircularBuffer{Float64}(N[i+1] - N[i]) for i in 1:K]
-    load_buffer = CircularBuffer{Float64}(N[1])
-    fill!(load_buffer, 0.)
-    for load_delay in load_delays
-        fill!(load_delay, 0.)
-    end
-
-    HM = zeros(length(ζ), length(positions), length(positions))
-
+function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, nmodel)
+    @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
 
-    for (k, ζζ) in enumerate(ζ), j in eachindex(positions), i in 1:j-1
+    for (k, ζζ) in enumerate(ζ), j in eachindex(sources), i in 1:j-1
         r = distances[i, j]
         HM[k, i, j] = C * W[k] * sin(r/rb*ζζ) / (r*ζζ) * (1 - expt[k])
         HM[k, j, i] = HM[k, i, j]
     end
-
-    qin = zeros(length(ζ))
-    qout = zeros(length(ζ))
-
-    N, BlockMethod(ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, ranges, Kranges, K_min, qin, qout)
 end

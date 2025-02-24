@@ -80,6 +80,99 @@ function create_bin_containers(bins)
 end
 get_bin(n, bins) = findfirst(m -> n < m, bins)
 
+function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, nmodel=nothing)
+    @unpack Δt, α, rb, kg, Δt̃ = constants
+
+    n = 10
+    Ns = length(sources)
+    # Evaluation points 
+    # DO NOT USE FOR SELF-RESPONSE
+    distances = zeros(Ns, Ns)
+    NR = zeros(Int, Ns, Ns)
+    K_min = zeros(Int, Ns, Ns)
+
+    for j in 1:Ns
+        for i in 1:j-1
+            distance, N_r = compute_distance(setup, sources[i], sources[j], constants, ϵ)
+            distances[i, j] = distance
+            distances[j, i] = distance
+            NR[i, j] = N_r
+            NR[j, i] = N_r
+        end
+    end
+    
+    Nr = filter!(e -> e != 0, unique(NR))
+    N = choose_blocks(Nr, Nt, p = 10)
+    K = length(N) - 1
+
+    for j in 1:Ns
+        for i in 1:j-1
+            Km = min(findlast(x -> x <= NR[i, j], N), K)
+            K_min[i, j] = Km
+            K_min[j, i] = Km
+        end
+    end
+   
+    ζ = zeros(0)
+    W = zeros(0)
+    indices = zeros(Int64, K+1)
+
+    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, n=n, ϵ=ϵ, constants=constants, nmodel=nmodel)
+    @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
+    @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
+
+    #sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = bakhalov_discretization(10, setup)
+    
+    # Preallocate objects
+    F = zeros(length(ζ))
+    expt = @. exp(-ζ^2*Δt̃)
+    expNin = zeros(length(ζ))
+    expNout = zeros(length(ζ))
+
+    for i in 1:K
+        @inbounds @. @views expNin[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i]*Δt̃)
+        if i < K
+            @inbounds @. @views expNout[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i+1]*Δt̃)
+        end
+    end
+
+    load_delays = [CircularBuffer{Float64}(N[i+1] - N[i]) for i in 1:K]
+    load_buffer = CircularBuffer{Float64}(N[1])
+    fill!(load_buffer, 0.)
+    for load_delay in load_delays
+        fill!(load_delay, 0.)
+    end
+
+    HM = zeros(length(ζ), length(sources), length(sources))
+    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ, nmodel=nmodel)
+
+    qin = zeros(length(ζ))
+    qout = zeros(length(ζ))
+
+    BlockMethod(
+        ζ, 
+        F, 
+        expt, 
+        expNin, 
+        expNout, 
+        HM, 
+        load_delays, 
+        load_buffer, 
+        ranges, 
+        Kranges, 
+        K_min, 
+        qin, 
+        qout,
+        #=sr_ζ,
+        sr_w,
+        sr_F,
+        sr_expt,
+        sr_expNout,
+        sr_Ic,
+        sr_Icout=#
+    )
+end
+
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
         ranges, Kranges, K_min, qinaux, qoutaux#=, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout =#= block

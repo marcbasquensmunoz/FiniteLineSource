@@ -60,6 +60,6 @@ export compute_ζ_points!, compute_N
 export compute_ζ_points_line!, compute_N_line
 export LineKernelParams, compute_kernel_line
 export LineToLineKernelParams, compute_kernel_double_line
-export evolve!, prepare_containers_ptp, prepare_containers_ltp, prepare_containers_ltl
+export evolve!, prepare_containers
 export N_Model, eval
 end

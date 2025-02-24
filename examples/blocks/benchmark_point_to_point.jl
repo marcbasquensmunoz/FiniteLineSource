@@ -28,7 +28,8 @@ positions = [(B*(i-1)^2, B*(j-1)^2, B*(k-1)^2) for i in 1:bn for j in 1:bm for k
 #####################################
 
 # Block method
-N, block = prepare_containers_ptp(positions, ϵ, Nt, params);
+#N, block = prepare_containers_ptp(positions, ϵ, Nt, params);
+block = prepare_containers(PointToPoint(r=0.), positions, ϵ, Nt, params);
 Ib = zeros(length(positions), Nt)
 evolve!(Ib, q, block)
 
@@ -46,7 +47,7 @@ err = @. abs(Ib[1, :] - C)
 Inh = zeros(Nt)
 
 # Precomputation
-block = @btime prepare_containers_ptp(positions, ϵ, Nt, params);
+block = @btime prepare_containers(PointToPoint(r=0.), positions, ϵ, Nt, params);
 precomp = @btime precompute_parameters(setup, params=params);
 
 # Simulation 

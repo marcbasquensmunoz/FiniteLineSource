@@ -177,88 +177,30 @@ function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::Lin
     (I1+I2)
 end
 
+function compute_distance(::SegmentToSegment, source, target, params, ϵ)
+    σ = compute_distance_2D(source, target)
+    setup = SegmentToPoint(D=source.D, H=source.H, z=target.D + target.H / 2 , σ=σ)
+    N_r = compute_N_line(ϵ, setup, params)
+    σ, N_r
+end
 
-function prepare_containers_ltl(sources, ϵ, Nt, params::Constants, nmodel::N_Model)
-    @unpack Δt, α, rb, kg, Δt̃ = params
-
-    n = 10
-    Ns = length(sources)
-    # Evaluation points 
-    # DO NOT USE FOR SELF-RESPONSE
-    distances = zeros(Ns, Ns)
-    NR = zeros(Int, Ns, Ns)
-    K_min = zeros(Int, Ns, Ns)
-
-    for j in 1:Ns
-        for i in 1:j-1
-            source = sources[i]
-            target = sources[j]
-            σ = FiniteLineSource.compute_distance_2D(source, target)
-            setup = SegmentToPoint(D=source.D, H=source.H, z=target.D + target.H / 2 , σ=σ)
-            N_r = compute_N_line(ϵ, setup, params)
-            distances[i, j] = σ
-            distances[j, i] = σ
-            NR[i, j] = N_r
-            NR[j, i] = N_r
-        end
-    end
-    
-    Nr = filter!(e -> e != 0, unique(NR))
-    N = choose_blocks(Nr, Nt, p = 10)
+function compute_ζ_discretization!(ζ, W, indices, ::SegmentToSegment; sources, N, n, ϵ, constants, nmodel)
     K = length(N) - 1
-
-    for j in 1:Ns
-        for i in 1:j-1
-            Km = min(findlast(x -> x <= NR[i, j], N), K)
-            K_min[i, j] = Km
-            K_min[j, i] = Km
-        end
-    end
-   
-    ζ = zeros(0)
-    W = zeros(0)
-    indices = zeros(Int64, K+1)
-
     D_eff = sum([source.D for source in sources])/length(sources)
     H_eff = sum([source.H for source in sources])/length(sources)
     z_eff = D_eff + H_eff/2
-
     for i in 1:K
-        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, n, D_eff, H_eff, z_eff, params, nmodel)
+        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, n, D_eff, H_eff, z_eff, constants, nmodel)
         @views indices[i+1:end] .+= N_block
     end
+end
 
-    @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
-    @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
-
-    #sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = bakhalov_discretization(10, setup)
-    
-    # Preallocate objects
-    F = zeros(length(ζ))
-    expt = @. exp(-ζ^2*Δt̃)
-    expNin = zeros(length(ζ))
-    expNout = zeros(length(ζ))
-
-    for i in 1:K
-        @inbounds @. @views expNin[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i]*Δt̃)
-        if i < K
-            @inbounds @. @views expNout[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i+1]*Δt̃)
-        end
-    end
-
-    load_delays = [CircularBuffer{Float64}(N[i+1] - N[i]) for i in 1:K]
-    load_buffer = CircularBuffer{Float64}(N[1])
-    fill!(load_buffer, 0.)
-    for load_delay in load_delays
-        fill!(load_delay, 0.)
-    end
+function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, nmodel)
+    @unpack kg, rb = constants
+    C = 1 / (2π^2*kg)
 
     bins = [10, 20, 30, 40, 50, 60, 70, 80, 100, 125, 150, 175, 200, 250]
-    X, Fx, PP, XT = FiniteLineSource.create_bin_containers(bins)
-
-    HM = zeros(length(ζ), length(sources), length(sources))
-
-    C = 1 / (2π^2*kg)
+    X, Fx, PP, XT = create_bin_containers(bins)
 
     for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
         σ = i == j ? rb : distances[i, j]
@@ -276,30 +218,4 @@ function prepare_containers_ltl(sources, ϵ, Nt, params::Constants, nmodel::N_Mo
         @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_double_line(lineparams, lineparamsT; x1=X[bin1], x2=X[bin2], x3=X[bin3], X1=XT[bin1], X2=XT[bin2], X3=XT[bin3], P1=PP[bin1], P2=PP[bin2], P3=PP[bin3], f1=Fx[bin1], f2=Fx[bin2], f3=Fx[bin3])
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
-
-    qin = zeros(length(ζ))
-    qout = zeros(length(ζ))
-
-    BlockMethod(
-        ζ, 
-        F, 
-        expt, 
-        expNin, 
-        expNout, 
-        HM, 
-        load_delays, 
-        load_buffer, 
-        ranges, 
-        Kranges, 
-        K_min, 
-        qin, 
-        qout,
-        #=sr_ζ,
-        sr_w,
-        sr_F,
-        sr_expt,
-        sr_expNout,
-        sr_Ic,
-        sr_Icout=#
-    )
 end
