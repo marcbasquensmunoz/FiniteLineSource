@@ -19,6 +19,7 @@ function SegmentToSegment(;D1, H1, D2, H2, σ)
         return SegmentToSegment(D1, H1, D2, H2, σ)
     end
 end
+transpose(p::SegmentToSegment) = SegmentToSegment(D1=p.D2, H1=p.H2, D2=p.D1, H2=p.H1, σ=p.σ)
 
 struct STSComputationContainers{T <: Number} <: ComputationContainers
     J::Matrix{T}

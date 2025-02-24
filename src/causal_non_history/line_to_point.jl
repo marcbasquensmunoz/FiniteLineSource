@@ -31,6 +31,48 @@ function load_nmodel()
     N_Model(model, mins, norms, zeros(Float32, 4))
 end
 
+@with_kw struct LineKernelParams{T <: Number} @deftype T
+    r1
+    r2
+    r3
+    rs
+    ω
+    σ
+    ϵ
+    n1::Int
+    n2::Int
+end
+
+function LineKernelParams(setup::SegmentToPoint, ω, ϵ, nmodel; n_max=500)
+    @unpack D, H, z, σ = setup
+
+    rB = sqrt(σ^2 + (z - D - H)^2 )
+    rT = sqrt(σ^2 + (z - D)^2     )
+    
+    r1 = (D < z && z < D+H) ? σ : min(rB, rT)
+    r2 = min(rB, rT)
+    r3 = max(rB, rT)
+    #rs = r1 + 4π/ω
+    #rs = r1 + min(4π/ω, (r2-r1)*0.1) 
+    rs = min(r1 + max(2, (r2-r1) * 0.01), r2)
+    n1, n2 = 0, 0
+
+    if r1 != r2
+        #@info "Computing n corresponding to I2"
+        n1 = N_bound(ϵ / (6), rs, r2, σ, nmodel, n_max=n_max)
+        #@show rs, r2, σ, ϵ / (6 * sqrt(r2-rs)), n1
+    end
+
+    if r2 != r3
+        #@info "Computing n corresponding to I1"
+        rl = max(r2, rs)
+        n2 = N_bound(ϵ / (3 * sqrt(r3-rl)), rl, r3, σ, nmodel, n_max=n_max)
+        #@show rl, r3, σ, ϵ / (3 * sqrt(r3-rl)), n2
+    end
+
+    LineKernelParams(r1=r1, r2=r2, r3=r3, rs=rs, ω=ω, σ=σ, n1=n1, n2=n2, ϵ=ϵ)
+end
+
 """
 Compute the number of steps N that can be skipped for a line to point
 """
@@ -131,9 +173,7 @@ function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X
         @. f1 = 2. / sqrt(abs(X1^2-σ^2))
         besselj!(X1, 1/2:(n1+1/2), m1*ω)
         @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
-
-        I_osc = sqrt(m1*π/(2ω)) * dot(X1, P1, f1) # This version creates less allocations, but runs slower
-        #I_osc += sqrt(m1*π/(2ω)) * X1' * P1 * f1
+        I_osc = sqrt(m1*π/(2ω)) * dot(X1, P1, f1)
 
         #=
         rs1 = rs + 1.
@@ -168,7 +208,7 @@ function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X
         @. f2 = 1. / sqrt(X2^2-σ^2)
         besselj!(X2, 1/2:(n2+1/2), m2*ω)
         @. X2 = X2 * imag(exp(im*ω*c2) * im^(0:n2)) * (2(0:n2)+1)
-        I_osc += sqrt(m2*π/(2ω)) * X2' * P2 * f2
+        I_osc += sqrt(m2*π/(2ω)) * dot(X2, P2, f2)
     end
 
     I_div + I_osc
@@ -333,7 +373,8 @@ function prepare_containers_ltp(sources, ϵ, Nt, params::Constants, nmodel::N_Mo
     for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
         σ = i == j ? rb : distances[i, j]
         source = sources[j]
-        setup = SegmentToPoint(D=source.D, H=source.H, z=source.D + source.H/2, σ=σ)
+        target = sources[i]
+        setup = SegmentToPoint(D=source.D, H=source.H, z=target.D + target.H/2, σ=σ)
         lineparams = LineKernelParams(setup, ζζ/rb, ϵ, nmodel)
         bin1 = FiniteLineSource.get_bin(lineparams.n1, bins)
         bin2 = FiniteLineSource.get_bin(lineparams.n2, bins)
