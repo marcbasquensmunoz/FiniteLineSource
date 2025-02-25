@@ -56,7 +56,7 @@ function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ, nmodel)
 end
 
 
-function compute_kernel_double_line_part(params::LineToLineKernelParams; x1=nothing, x2=nothing, x3=nothing, X1=nothing, X2=nothing, X3=nothing, f1=nothing, f2=nothing, f3=nothing, P1=nothing, P2=nothing, P3=nothing)
+function compute_kernel_double_line_part(params::LineToLineKernelParams; BV1, BV2, BV3)
     @unpack r1, r2, r3, r4, rs, ω, ϵ, α1, α2, α3, σ = params
 
     h(r) = r < r2 ? α1 : (r < r3 ? α2 : α3)
@@ -73,10 +73,15 @@ function compute_kernel_double_line_part(params::LineToLineKernelParams; x1=noth
     end
 
     if r1 != r2
+        x1 = BV1.x
+        X1 = BV1.X
+        P1 = BV1.P
+        f1 = BV1.f
+        n1 = BV1.n
+
         m1 = (r2-rs)/2
         c1 = (r2+rs)/2
         @. X1 = m1*x1 + c1
-        n1 = length(X1)-1
 
         @. f1 = α1 / sqrt(X1^2-σ^2)
         besselj!(X1, 1/2:(n1+1/2), m1*ω)
@@ -85,11 +90,16 @@ function compute_kernel_double_line_part(params::LineToLineKernelParams; x1=noth
     end
 
     if r2 != r3    
+        x2 = BV2.x
+        X2 = BV2.X
+        P2 = BV2.P
+        f2 = BV2.f
+        n2 = BV2.n
+
         rl = max(rs, r2)
         m2 = (r3-rl)/2
         c2 = (r3+rl)/2
         @. X2 = m2*x2 + c2
-        n2 = length(X2)-1
 
         @. f2 = α2 / sqrt(X2^2-σ^2)
         besselj!(X2, 1/2:(n2+1/2), m2*ω)
@@ -98,11 +108,16 @@ function compute_kernel_double_line_part(params::LineToLineKernelParams; x1=noth
     end
 
     if r3 != r4
+        x3 = BV3.x
+        X3 = BV3.X
+        P3 = BV3.P
+        f3 = BV3.f
+        n3 = BV3.n
+
         rl = max(rs, r3)
         m3 = (r4-rl)/2
         c3 = (r4+rl)/2
         @. X3 = m3*x3 + c3
-        n3 = length(X3)-1
 
         @. f3 = α3 / sqrt(X3^2-σ^2)
         besselj!(X3, 1/2:(n3+1/2), m3*ω)
@@ -113,67 +128,9 @@ function compute_kernel_double_line_part(params::LineToLineKernelParams; x1=noth
     I_div + I_osc + I_osc_linear
 end
 
-function compute_kernel_double_line_part(ζ, rb, setup::SegmentToSegment; x, X, P, f, atol)
-    @unpack D1, H1, D2, H2, σ = setup
-    rmin = σ
-
-    rLR = sqrt(σ^2 + (D2 - D1 - H1)^2     ) 
-    rLL = sqrt(σ^2 + (D2 - D1)^2          )
-    rUL = sqrt(σ^2 + (D1 - D2 - H2)^2     ) 
-    rUR = sqrt(σ^2 + (D2 + H2 - D1 - H1)^2)
-
-    r1 = D2 > D1 + H1 ? rLR : rmin
-    r2 = H2 > H1 ? (D2 > D1 ? rLL : rmin) : (D2 + H2 > D1 + H1 ? rUR : rmin)
-    r3 = H2 > H1 ? (D2 + H2 > D1 + H1 ? rUR : rmin) : (D2 > D1 ? rLL : rmin)
-    r4 = D2 + H2 > D1 ? rUL : rmin
-
-    α1 = D1 - D2 + H1
-    α2 = min(H1, H2)
-    α3 = D2 - D1 + H2
-
-    ω = ζ/rb
-    h1(r) = r < r2 ? α1 : (r < r3 ? α2 : α3)
-    h2(r) = r < r2 ? 1. : (r < r3 ? 0. : -1.)
-
-    split = r1
-    I_div = 0.
-
-    if r1 == σ
-        split = r1 + min(π/ω, (r4-r1)*0.1)
-        mult = r1 == r2 ? (r2 == r3 ? α3 : α2) : α1
-        C = mult * sin(σ*ω)
-        h_reg(r) = r == σ ? 0. : (sin(r*ω) * h1(r) - C) / sqrt(r^2-σ^2)
-        I1, _ = quadgk(h_reg, r1, split, atol=atol)
-        I2 = C * acoth(split/sqrt(split^2-r1^2))
-        I_div = I1 + I2
-    end
-
-    m = (r4-split)/2
-    c = (r4+split)/2
-
-    n = length(x)-1
-    @. X = m*x + c
-    @. f = h1(X) / sqrt(X^2-σ^2)
-
-    besselj!(X, 1/2:(n+1/2), m*ω)
-    @. X = X * imag(exp(im*ω*c) * im^(0:n)) * (2(0:n)+1)
-
-    I_osc = sqrt(m*π/(2ω)) * X' * P * f
-    I_osc_linear = (cos(ω*r1) - cos(ω*r2) - cos(ω*r3) + cos(ω*r4))/ω
-
-    I_div + I_osc + I_osc_linear
-end
-
-function compute_kernel_double_line(ζ, rb, setup::SegmentToSegment; x, X, P, f, atol=1e-8)
-    I1 = compute_kernel_double_line_part(ζ, rb, setup, x=x, X=X, P=P, f=f, atol=atol)
-    tranposed_setup = SegmentToSegment(D1=setup.D2, H1=setup.H2, D2=setup.D1, H2=setup.H1, σ=setup.σ)
-    I2 = compute_kernel_double_line_part(ζ, rb, tranposed_setup, x=x, X=X, P=P, f=f, atol=atol)
-    (I1+I2)/setup.H2
-end
-
-function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::LineToLineKernelParams; x1=nothing, x2=nothing, x3=nothing, X1=nothing, X2=nothing, X3=nothing, f1=nothing, f2=nothing, f3=nothing, P1=nothing, P2=nothing, P3=nothing)
-    I1 = compute_kernel_double_line_part(params, x1=x1, x2=x2, x3=x3, X1=X1, X2=X2, X3=X3, f1=f1, f2=f2, f3=f3, P1=P1, P2=P2, P3=P3)
-    I2 = compute_kernel_double_line_part(paramsT, x1=x1, x2=x2, x3=x3, X1=X1, X2=X2, X3=X3, f1=f1, f2=f2, f3=f3, P1=P1, P2=P2, P3=P3)
+function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::LineToLineKernelParams; BV1, BV2, BV3)
+    I1 = compute_kernel_double_line_part(params, BV1=BV1, BV2=BV2, BV3=BV3)
+    I2 = compute_kernel_double_line_part(paramsT, BV1=BV1, BV2=BV2, BV3=BV3)
     (I1+I2)
 end
 
@@ -200,7 +157,7 @@ function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, con
     C = 1 / (2π^2*kg)
 
     bins = [10, 20, 30, 40, 50, 60, 70, 80, 100, 125, 150, 175, 200, 250]
-    X, Fx, PP, XT = create_bin_containers(bins)
+    containers = create_bin_containers(bins)
 
     for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
         σ = i == j ? rb : distances[i, j]
@@ -215,7 +172,7 @@ function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, con
         bin2 = FiniteLineSource.get_bin(max(lineparams.n2, lineparamsT.n2), bins)
         bin3 = FiniteLineSource.get_bin(max(lineparams.n3, lineparamsT.n3), bins)
 
-        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_double_line(lineparams, lineparamsT; x1=X[bin1], x2=X[bin2], x3=X[bin3], X1=XT[bin1], X2=XT[bin2], X3=XT[bin3], P1=PP[bin1], P2=PP[bin2], P3=PP[bin3], f1=Fx[bin1], f2=Fx[bin2], f3=Fx[bin3])
+        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_double_line(lineparams, lineparamsT; BV1=containers[bin1], BV2=containers[bin2], BV3=containers[bin3])
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end

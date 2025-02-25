@@ -56,18 +56,17 @@ function N_bound(ϵ, a, b, σ, nmodel)
     Int(ceil(eval(nmodel, ϵ, σ, a, b)))
 end
 
-@with_kw struct LineKernelContainers{T <: Number} @deftype T
+@with_kw struct LineKernelContainers{T <: Number}
     x::Vector{T}
     X::Vector{T}
     f::Vector{T}
     P::Matrix{T}
+    n::Int
 end 
+LineKernelContainers(;x::Vector{T}, P::Matrix{T}) where {T <: Number} = LineKernelContainers{T}(x=x, P=P, f=zeros(T, length(x)), X=zeros(T, length(x)), n=length(x)-1)
 
 function create_bin_containers(bins)
-    X = Vector{Vector{Float64}}()
-    PP = Vector{Matrix{Float64}}()
-    F = Vector{Vector{Float64}}()
-    XT = Vector{Vector{Float64}}()
+    containers = Vector{LineKernelContainers{Float64}}()
 
     for n in bins
         x, w = gausslegendre(n+1)
@@ -76,16 +75,11 @@ function create_bin_containers(bins)
             @inbounds @views collectPl!(P[:, s], x[s], lmax=n)
             @inbounds @views @. P[:, s] *= w[s]
         end
-        f = zeros(n+1)
-        xt = zeros(n+1)
 
-        push!(X, x)
-        push!(F, f)
-        push!(PP, P)
-        push!(XT, xt)
+        push!(containers, LineKernelContainers(x=x, P=P))       
     end
 
-    X, F, PP, XT
+    return containers
 end
 get_bin(n, bins) = findfirst(m -> n < m, bins)
 

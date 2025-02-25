@@ -114,10 +114,9 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, n, D, H, z, params::Constants
         @inbounds @views collectPl!(Pb[:, s], xb[s], lmax=Nl)
         @inbounds @views @. Pb[:, s] *= wb[s]
     end
-    Xb = zeros(Nl+1)
-    aux = zeros(Nl+1)
+    BV = LineKernelContainers(x=xb, P=Pb)
 
-    int_sin(ζ) = compute_kernel_line(LineKernelParams(setup, ζ/rb, ϵ, nmodel), x1=xb, x2=xb, X1=Xb, X2=Xb, P1=Pb, P2=Pb, f1=aux, f2=aux)
+    int_sin(ζ) = compute_kernel_line(LineKernelParams(setup, ζ/rb, ϵ, nmodel), BV1=BV, BV2=BV)
     #int_sin(ζ) = compute_kernel_line(ζ, rb, setup, x=xb, X=Xb, P=Pb, f=aux, atol=ϵ) 
 
     guide(ζ) = (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * int_sin(ζ) * (1 - exp(-ζ^2*Δt̃)) / ζ
@@ -144,7 +143,7 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, n, D, H, z, params::Constants
     return Nζ
 end
 
-function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X1=nothing, X2=nothing, P1=nothing, P2=nothing, f1=nothing, f2=nothing)
+function compute_kernel_line(params::LineKernelParams; BV1, BV2)#x1=nothing, x2=nothing, X1=nothing, X2=nothing, P1=nothing, P2=nothing, f1=nothing, f2=nothing)
     @unpack r1, r2, r3, rs, ω, σ, ϵ, n1, n2 = params
 
     h(r) = r < r2 ? 2. : 1.
@@ -162,9 +161,14 @@ function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X
         I_div = I1 + I2
     end
 
-    n1 = length(X1) - 1
     if r1 != r2
         #@info "Computing I2"
+        x1 = BV1.x
+        X1 = BV1.X
+        P1 = BV1.P
+        f1 = BV1.f
+        n1 = BV1.n
+
         m1 = (r2-rs)/2
         c1 = (r2+rs)/2
         @. X1 = m1*x1 + c1
@@ -195,9 +199,13 @@ function compute_kernel_line(params::LineKernelParams; x1=nothing, x2=nothing, X
         =#
     end
 
-    n2 = length(X2) - 1
-
     if r2 != r3    
+        x2 = BV2.x
+        X2 = BV2.X
+        P2 = BV2.P
+        f2 = BV2.f
+        n2 = BV2.n
+
         #@info "Computing I1"
         rl = r1 == σ ? max(rs, r2) : r2
         m2 = (r3-rl)/2
@@ -310,7 +318,7 @@ function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, const
     C = 1 / (2π^2*kg)
 
     bins = [10, 20, 30, 40, 50, 60, 70, 80, 100, 125, 150, 175, 200, 250]
-    X, Fx, PP, XT = create_bin_containers(bins)
+    containers = create_bin_containers(bins)
 
     for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
         σ = i == j ? rb : distances[i, j]
@@ -320,7 +328,7 @@ function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, const
         lineparams = LineKernelParams(setup, ζζ/rb, ϵ, nmodel)
         bin1 = FiniteLineSource.get_bin(lineparams.n1, bins)
         bin2 = FiniteLineSource.get_bin(lineparams.n2, bins)
-        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_line(lineparams; x1=X[bin1], x2=X[bin2], X1=XT[bin1], X2=XT[bin2], P1=PP[bin1], P2=PP[bin2], f1=Fx[bin1], f2=Fx[bin2])
+        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_line(lineparams; BV1=containers[bin1], BV2=containers[bin2])
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end

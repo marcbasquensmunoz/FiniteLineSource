@@ -1,5 +1,6 @@
 using FiniteLineSource
 using FiniteLineSource: LineSource
+using BenchmarkTools
 
 ϵ = 1e-6
 Nt = 1000
@@ -18,13 +19,11 @@ H2 = 100.
 kg = 3.
 rb = 0.1
 Δt = 3600.
-constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points=[1, 1, 1, 1, 1] .* 500, line_limits=[0., 0.1, 0.3, 0.7, 0.9, 1.])
+constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points=[1, 1, 1, 1, 1] .* 50, line_limits=[0., 0.1, 0.3, 0.7, 0.9, 1.])
 
 q = [1. for t in 1:Nt]
 
-
 bh_positions = [LineSource(x=B*(i-1)^2, y=B*(j-1)^2, D=D1, H=H1) for i in 1:bn for j in 1:bm]
-constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points=[1, 1, 1, 1, 1] .* 500, line_limits=[0., 0.1, 0.3, 0.7, 0.9, 1.])
 
 #####################################
 # Error analysis
@@ -37,7 +36,7 @@ Ib = zeros(length(bh_positions), Nt)
 @time evolve!(Ib, q, block)
 
 # Convolution
-setup = SegmentToSegment(D1=D1, H1=H1, D2=D2, H2=H2, σ=B)
+setup = SegmentToSegmentOld(D1=D1, H1=H1, D2=D2, H2=H2, σ=B)
 C = convolve_step(q, setup; params=constants)
 
 # Error
