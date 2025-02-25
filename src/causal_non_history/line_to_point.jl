@@ -101,10 +101,9 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, n, D, H, z, params::Constants
     f(b) = 2ϵ/z_int - (gamma(0, b^2*N*Δt̃) - gamma(0, b^2*(N+1)*Δt̃))
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
     b = solve(problem)
-    #=if b == 0
+    if b == 0
         b = sqrt(-log(ϵ) / (N*Δt̃))
     end
-    =#
 
     setup = SegmentToPoint(D=D, H=H, z=z, σ=σ)
 

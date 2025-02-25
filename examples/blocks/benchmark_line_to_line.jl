@@ -1,4 +1,5 @@
 using FiniteLineSource
+using FiniteLineSource: LineSource
 
 ϵ = 1e-6
 Nt = 1000
@@ -21,12 +22,6 @@ constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points=[1, 1, 1, 1, 1] 
 
 q = [1. for t in 1:Nt]
 
-@with_kw struct LineSource{T <: Number} @deftype T
-    x
-    y
-    D
-    H
-end
 
 bh_positions = [LineSource(x=B*(i-1)^2, y=B*(j-1)^2, D=D1, H=H1) for i in 1:bn for j in 1:bm]
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points=[1, 1, 1, 1, 1] .* 500, line_limits=[0., 0.1, 0.3, 0.7, 0.9, 1.])

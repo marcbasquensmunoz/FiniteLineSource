@@ -23,7 +23,6 @@ function compute_ζ_points!(ζ, W, N, No, ϵ, Q, n, params::Constants)
     r̃ = r/rb
 
     guide(ζ) = (exp(-ζ^2*N*Δt̃) + 100 * exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
-    #guide(ζ) = exp(-ζ^2*N*Δt̃) * sin(r̃*ζ) / (r*ζ) * (1 -  exp(-ζ^2*Δt̃))
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
     sort!(segbuf, by=s->s.a)
     n_seg = length(segbuf)

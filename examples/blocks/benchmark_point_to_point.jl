@@ -1,4 +1,4 @@
-using FiniteLineSource: convolve_step, Constants, precompute_parameters, compute_integral_throught_history!, PointToPoint, prepare_containers_ptp, evolve!
+using FiniteLineSource: convolve_step, Constants, precompute_parameters, compute_integral_throught_history!, PointToPoint, evolve!
 using BenchmarkTools
 
 ϵ = 1e-6
@@ -28,7 +28,6 @@ positions = [(B*(i-1)^2, B*(j-1)^2, B*(k-1)^2) for i in 1:bn for j in 1:bm for k
 #####################################
 
 # Block method
-#N, block = prepare_containers_ptp(positions, ϵ, Nt, params);
 block = prepare_containers(PointToPoint(r=0.), positions, ϵ, Nt, params);
 Ib = zeros(length(positions), Nt)
 evolve!(Ib, q, block)

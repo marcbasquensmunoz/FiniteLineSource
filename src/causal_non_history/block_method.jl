@@ -13,12 +13,21 @@ struct BlockMethod{T <: Number}
     K_min::Matrix{Int}
     qinaux::Vector{T}
     qoutaux::Vector{T}
+    N::Vector{Int}
 end
+@with_kw struct LineSource{T <: Number} @deftype T
+    x
+    y
+    D
+    H
+end
+
 
 """
 Computes the blocks to be used
 """
 function choose_blocks(Nr, Nt; p = 10)
+    if isempty(Nr) return [Nt] end
     Nmin = minimum(Nr)
     Ncurrent = Nmin
     N = zeros(Int, 0)
@@ -29,7 +38,7 @@ function choose_blocks(Nr, Nt; p = 10)
     end
     !(Nmin in N) && push!(N, Nmin)
     sort!(N)
-    push!(N, Nt)
+    if !(Nt in N) push!(N, Nt) end
 
     @views for (na, nb) in zip(N[1:end-1], N[2:end])
         if isempty(filter(n -> n in na:nb, Nr)) 
@@ -107,7 +116,8 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     for j in 1:Ns
         for i in 1:j-1
-            Km = min(findlast(x -> x <= NR[i, j], N), K)
+            last_block = findlast(x -> x <= NR[i, j], N)
+            Km = min(isnothing(last_block) ? 0 : last_block, K)
             K_min[i, j] = Km
             K_min[j, i] = Km
         end
@@ -144,6 +154,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     end
 
     HM = zeros(length(ζ), length(sources), length(sources))
+
     compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ, nmodel=nmodel)
 
     qin = zeros(length(ζ))
@@ -163,6 +174,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         K_min, 
         qin, 
         qout,
+        N
         #=sr_ζ,
         sr_w,
         sr_F,
@@ -176,6 +188,8 @@ end
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
         ranges, Kranges, K_min, qinaux, qoutaux#=, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout =#= block
+
+    if isempty(Kranges) return end
 
     for (nt, qt) in enumerate(q)
         current_q = load_buffer[1]
