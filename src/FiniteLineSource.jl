@@ -6,14 +6,12 @@ export precompute_parameters, fevolve_through_history!, compute_integral_and_adv
 using Parameters
 using QuadGK
 using LinearAlgebra
-using Cubature
 using FastGaussQuadrature
 using LegendrePolynomials
 using DSP
 using Bessels
 using StaticArrays
 using SpecialFunctions
-using TaylorDiff
 using Roots
 using DataStructures
 using Flux
