@@ -83,7 +83,7 @@ function create_bin_containers(bins)
 end
 get_bin(n, bins) = findfirst(m -> n < m, bins)
 
-function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, nmodel=nothing)
+function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10
@@ -121,7 +121,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     W = zeros(0)
     indices = zeros(Int64, K+1)
 
-    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, n=n, ϵ=ϵ, constants=constants, nmodel=nmodel)
+    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, n=n, ϵ=ϵ, constants=constants, containers=containers)
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 
@@ -149,7 +149,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     HM = zeros(length(ζ), length(sources), length(sources))
 
-    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ, nmodel=nmodel)
+    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ, containers=containers)
 
     qin = zeros(length(ζ))
     qout = zeros(length(ζ))
