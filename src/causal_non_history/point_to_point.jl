@@ -46,13 +46,13 @@ function compute_ζ_points!(ζ, W, N, No, ϵ, Q, n, params::Constants)
     return Nζ
 end
 
-function compute_distance(::PointToPoint, source, target, params, ϵ)
+function compute_distance(::PointToPoint, source, target, params, ϵ, Nt)
     r = compute_distance_3D(source, target)
     N_r = compute_N(r, ϵ, params)
     r, N_r
 end
 
-function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, n, ϵ, constants, nmodel)
+function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, n, ϵ, constants, containers=nothing)
     K = length(N) - 1
     for i in 1:K
         N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, 1., n, constants)
@@ -60,7 +60,7 @@ function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, 
     end
 end
 
-function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, nmodel)
+function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers)
     @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
 

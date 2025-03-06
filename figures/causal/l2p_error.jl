@@ -1,5 +1,5 @@
 using FiniteLineSource
-using FiniteLineSource: LineSource
+using FiniteLineSource: LineSource, AsymptoticContainers
 using Makie
 using CairoMakie
 
@@ -16,7 +16,7 @@ D = 0.
 H = 150.
 z = D + H/2
 
-Nt = 100
+Nt = 1000
 
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 q = [1. for t in 1:Nt]
@@ -27,8 +27,8 @@ function compute_error_Linf_l2p(;σ, ϵ, q, constants, D, H, z)
 
     setup = SegmentToPoint(D=D, H=H, z=z, σ=σ)
 
-    nmodel = FiniteLineSource.load_nmodel()
-    block = prepare_containers(setup, sources, ϵ, Nt, constants, nmodel);
+    containers = AsymptoticContainers(10)
+    block = prepare_containers(setup, sources, ϵ, Nt, constants, containers);
     Ib = zeros(length(sources), Nt)
     evolve!(Ib, q, block)
 
@@ -51,7 +51,7 @@ for (i, ϵ) in enumerate(ϵ_range)
 end
 
 fig = Figure()
-ax = Axis(fig[1, 1], xlabel = L"\sigma", ylabel =  L"\log_{10} \Vert \epsilon _{\infty} \Vert", title = L"\text{Error in the line to point case}; \ D = 0, \ H=150 m, \ z = 75m")
+ax = Axis(fig[1, 1], xlabel = L"\sigma", ylabel =  L"\log_{10} \Vert \epsilon \Vert_{\infty}", title = L"\text{Error in the line to point case}; \ D = %$D, \ H=%$H \text{m}, \ z = %$(D+H/2) \text{m}")
 
 for (i, ϵ) in enumerate(ϵ_range)
     lines!(ax, r_range, log10.(res[:, i]), label = L"\epsilon = 10^{%$(Int(log10(ϵ)))}")

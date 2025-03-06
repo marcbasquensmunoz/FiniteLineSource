@@ -11,7 +11,7 @@ kg = 3.
 rb = 0.1
 Δt = 3600.
 
-Nt = 100
+Nt = 1000
 
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 q = [1. for t in 1:Nt]

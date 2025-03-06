@@ -34,10 +34,6 @@ function asymptotic_F!(x, containers::AsymptoticContainers)
     sqrtr = sqrt(r)
     rp = 1.
     for p in 0:N-1
-        #=
-        v1[p+1] = r^(p+1/2) 
-        v2[p+1] = p%2 == 1 ? x*r : 1.
-        =#
         v1[p+1] = rp*sqrtr
         v2[p+1] = p%2 == 1 ? x*r : 1.
         rp *= r
@@ -57,7 +53,6 @@ function asymptotic_error(a, b, σ, ω, containers::AsymptoticContainers)
             rp = 1.
             sqrtr = sqrt(r)
             for p in 0:N
-                #res -= A[N+1, p+1] * r^(p+1) / (2p+1) 
                 res -= A[N+1, p+1] * rp*sqrtr / (2p+1)
                 rp *= r
             end
@@ -67,8 +62,8 @@ function asymptotic_error(a, b, σ, ω, containers::AsymptoticContainers)
 
     return abs(σNI(b/σ) - σNI(a/σ)) / (ω*σ)^N 
 
-    #=
-
+#=
+    # Second best
     σN = let A=A, N=N
         x -> begin 
         res = 0.
@@ -79,9 +74,9 @@ function asymptotic_error(a, b, σ, ω, containers::AsymptoticContainers)
         return res 
     end
     end
-    # Second best
-    #return abs(quadgk(σN, acosh(a/σ), acosh(b/σ))[1]) / (ω*σ)^N 
-
+    return abs(quadgk(σN, acosh(a/σ), acosh(b/σ))[1]) / (ω*σ)^N 
+=#
+#=
     # Accurate
     f = let N=N, ω=ω, σ=σ
         x -> σN(x) * imag(exp(im*ω*σ*cosh(x))/(-im)^N)
@@ -98,10 +93,6 @@ function asymptotic(a, b, σ, ω, containers::AsymptoticContainers)
     r = im/(ω*σ)
     rp = r
     for i in 1:N
-        #=
-        w1[i] = imag(expa/(-im*ω*σ)^(i))
-        w2[i] = imag(expb/(-im*ω*σ)^(i))
-        =#
         w1[i] = imag(expa*rp)
         w2[i] = imag(expb*rp)
         rp *= r
@@ -114,11 +105,14 @@ function asymptotic(a, b, σ, ω, containers::AsymptoticContainers)
 end
 
 function find_integration_interval(ϵ, a, b, σ, ω, containers::AsymptoticContainers)
-    if asymptotic_error(a, b, σ, ω, containers) < ϵ return a end
     if a == σ a += (b-a)*0.01 end
+    if asymptotic_error(a, b, σ, ω, containers) < ϵ return a end
     f = let b=b, σ=σ, ω=ω, containers=containers, ϵ=ϵ
         x -> asymptotic_error(x, b, σ, ω, containers) - ϵ
     end
     problem = ZeroProblem(f, (a, b))
-    return solve(problem, Roots.Brent(), xatol=1e-0)
+    sol = solve(problem, Roots.Brent(), xatol=1e-0)
+    return sol
 end
+
+(a, b, σ, ω) = (2.0, 75.02666192761077, 2.0, 29.235335194084737)

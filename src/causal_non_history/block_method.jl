@@ -48,41 +48,6 @@ function choose_blocks(Nr, Nt; p = 10)
     return N
 end
 
-"""
-Compute the minimum number of terms n to use in the Legendre expansion of the function 1/sqrt(x^2-σ^2)
-to obtain an error lower than ϵ in the interval [a, b].
-"""
-function N_bound(ϵ, a, b, σ, nmodel)
-    Int(ceil(eval(nmodel, ϵ, σ, a, b)))
-end
-
-@with_kw struct LineKernelContainers{T <: Number}
-    x::Vector{T}
-    X::Vector{T}
-    f::Vector{T}
-    P::Matrix{T}
-    n::Int
-end 
-LineKernelContainers(;x::Vector{T}, P::Matrix{T}) where {T <: Number} = LineKernelContainers{T}(x=x, P=P, f=zeros(T, length(x)), X=zeros(T, length(x)), n=length(x)-1)
-
-function create_bin_containers(bins)
-    containers = Vector{LineKernelContainers{Float64}}()
-
-    for n in bins
-        x, w = gausslegendre(n+1)
-        P = zeros(n+1, n+1)
-        for s in 1:n+1
-            @inbounds @views collectPl!(P[:, s], x[s], lmax=n)
-            @inbounds @views @. P[:, s] *= w[s]
-        end
-
-        push!(containers, LineKernelContainers(x=x, P=P))       
-    end
-
-    return containers
-end
-get_bin(n, bins) = findfirst(m -> n < m, bins)
-
 function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
@@ -96,9 +61,10 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     for j in 1:Ns
         for i in 1:j-1
-            distance, N_r = compute_distance(setup, sources[i], sources[j], constants, ϵ)
+            distance, N_r = compute_distance(setup, sources[i], sources[j], constants, ϵ, Nt)
             distances[i, j] = distance
             distances[j, i] = distance
+            if N_r > Nt N_r = Nt end
             NR[i, j] = N_r
             NR[j, i] = N_r
         end

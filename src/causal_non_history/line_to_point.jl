@@ -26,14 +26,16 @@ end
 """
 Compute the number of steps N that can be skipped for a line to point
 """
-function compute_N_line(ϵ, setup::SegmentToPoint, params::Constants) 
+function compute_N_line(ϵ, Nt, setup::SegmentToPoint, params::Constants) 
     @unpack σ, D, H, z = setup
     @unpack α, kg, Δt = params
     f(N) = quadgk(zp -> erfc(sqrt(σ^2 + (zp - z)^2) / sqrt(4α * Δt * N))/(4*π*kg*sqrt(σ^2 + (zp - z)^2)), D, D+H)[1] - ϵ
+    if f(1)*f(Nt) > 0 return Nt end
     problem = ZeroProblem(f, 10σ^2)
-    sol = solve(problem)
+    sol = solve(problem, xtol=1.)
     Int(floor(sol))
 end
+# Check this when the point of evaluation is too far
 
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
@@ -91,7 +93,6 @@ function compute_kernel_line(params::LineKernelParams; containers)
     H = let ω=ω, σ=σ
         t -> sin(ω * σ * cosh(t))
     end
-    #H(t) = sin(ω * σ * cosh(t))
 
     if r2 != r3 
         a = find_integration_interval(ϵ/4, r2, r3, σ, ω, containers)
@@ -137,10 +138,10 @@ function bakhalov_discretization(N, setup, params::Constants)
 end
 =#
 
-function compute_distance(::SegmentToPoint, source, target, params, ϵ)
+function compute_distance(::SegmentToPoint, source, target, params, ϵ, Nt)
     σ = compute_distance_2D(source, target)
     setup = SegmentToPoint(D=source.D, H=source.H, z=target.D + target.H / 2 , σ=σ)
-    N_r = compute_N_line(ϵ, setup, params)
+    N_r = compute_N_line(ϵ, Nt, setup, params)
     σ, N_r
 end
 

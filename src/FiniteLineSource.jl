@@ -54,11 +54,10 @@ include("causal_non_history/point_to_point.jl")
 include("causal_non_history/line_to_point.jl")
 include("causal_non_history/line_to_line.jl")
 include("causal_non_history/asymptotic_integration.jl")
-export N_bound, choose_blocks, N_bound
+export choose_blocks
 export compute_ζ_points!, compute_N
 export compute_ζ_points_line!, compute_N_line
 export LineKernelParams, compute_kernel_line, LineKernelContainers
 export LineToLineKernelParams, compute_kernel_double_line
 export evolve!, prepare_containers
-export N_Model, eval
 end
