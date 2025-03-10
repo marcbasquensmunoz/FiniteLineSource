@@ -13,7 +13,6 @@ using DSP
 using Bessels
 using StaticArrays
 using SpecialFunctions
-using TaylorDiff
 using Roots
 
 include("nonhistory/interface.jl")

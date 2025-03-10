@@ -65,7 +65,7 @@ struct BoreholeDiscretization{T <: Number}
     S::Int
 end
 function BoreholeDiscretization(ξ, p, segments = ξ) 
-    Nd = 2
+    Nd = length(ξ) 
     P = [map(x->x[i], p) for i in 1:3]
     Ξ = [ξ[k]^m for k in 1:Nd, m in 0:Nd-1]
 
