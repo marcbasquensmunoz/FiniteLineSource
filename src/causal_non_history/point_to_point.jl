@@ -8,6 +8,12 @@ function compute_N(r, ϵ, params::Constants)
     @unpack Δt, α, kg = params
     Int(floor((r / sqrt(4α) / erfcinv(4*π*r*kg*ϵ))^2/Δt))
 end
+function compute_r(N, ϵ, params::Constants) 
+    @unpack Δt, α, kg = params
+    f(r) = erfc(r / sqrt(4α*Δt*N)) / (4*π*r*kg) - ϵ
+    problem = ZeroProblem(f, (0, N))
+    solve(problem, Roots.Brent(), xatol = 1e-2)
+end
 
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps

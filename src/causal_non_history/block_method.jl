@@ -26,25 +26,13 @@ end
 """
 Computes the blocks to be used
 """
-function choose_blocks(Nr, Nt; p = 10)
+function choose_blocks(::Setup, Nr, Nt, ϵ, params)
     if isempty(Nr) return [Nt] end
     Nmin = minimum(Nr)
-    Ncurrent = Nmin
-    N = zeros(Int, 0)
-
-    while Ncurrent < Nt
-        push!(N, Int(floor(Ncurrent)))
-        Ncurrent *= p
-    end
-    !(Nmin in N) && push!(N, Nmin)
-    sort!(N)
-    if !(Nt in N) push!(N, Nt) end
-
-    @views for (na, nb) in zip(N[1:end-1], N[2:end])
-        if isempty(filter(n -> n in na:nb, Nr)) 
-            deleteat!(N, findfirst(x->x==na, N))
-        end
-    end
+    T = unique(min.([24*30, 10*8760, Nt], Nt))
+    Ns = findfirst(x -> x >= Nmin, T)
+    N = [Nmin]
+    append!(N, T[Ns:end])
     return N
 end
 
@@ -69,15 +57,16 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
             NR[j, i] = N_r
         end
     end
-    
+
     Nr = filter!(e -> e != 0, unique(NR))
-    N = choose_blocks(Nr, Nt, p = 10)
+    N, ND = choose_blocks(setup, distances, Nr, Nt, ϵ, constants)
     K = length(N) - 1
 
+    @show N, ND
     for j in 1:Ns
         for i in 1:j-1
             last_block = findlast(x -> x <= NR[i, j], N)
-            Km = min(isnothing(last_block) ? 0 : last_block, K)
+            Km = min(isnothing(last_block) ? 1 : last_block, K)
             K_min[i, j] = Km
             K_min[j, i] = Km
         end
@@ -87,7 +76,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     W = zeros(0)
     indices = zeros(Int64, K+1)
 
-    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, n=n, ϵ=ϵ, constants=constants, containers=containers)
+    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ, constants=constants, containers=containers)
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 
@@ -105,7 +94,6 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
             @inbounds @. @views expNout[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i+1]*Δt̃)
         end
     end
-
     load_delays = [CircularBuffer{Float64}(N[i+1] - N[i]) for i in 1:K]
     load_buffer = CircularBuffer{Float64}(N[1])
     fill!(load_buffer, 0.)
@@ -115,7 +103,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     HM = zeros(length(ζ), length(sources), length(sources))
 
-    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ, containers=containers)
+    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ, containers=containers, N=N, ND=ND, ranges=ranges)
 
     qin = zeros(length(ζ))
     qout = zeros(length(ζ))
