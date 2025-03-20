@@ -19,7 +19,7 @@ end
 """
 Computes the blocks to be used
 """
-function choose_blocks(::PointToPoint, sources, distances, Nr, Nt, ϵ, constants)
+function choose_blocks(::PointToPoint, sources, Nr, Nt, ϵ, constants)
     if isempty(Nr) return [Nt] end
     Nmin = minimum(Nr)
     T = unique(min.([24*30, 10*8760, Nt], Nt))

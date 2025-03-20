@@ -1,4 +1,4 @@
-using FiniteLineSource: convolve_step, Constants, precompute_parameters, compute_integral_throught_history!, PointToPoint, evolve!
+using FiniteLineSource
 using BenchmarkTools
 
 ϵ = 1e-6
@@ -12,11 +12,11 @@ bl = 1
 α = 1e-6
 kg = 3.
 rb = 0.1
-params = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
+constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 
 Δt̃ = Δt*α/rb^2
 
-B = 5.
+B = 0.7
 
 q = [1. for t in 1:Nt]
 
@@ -26,15 +26,15 @@ positions = [(B*(i-1)^2, B*(j-1)^2, B*(k-1)^2) for i in 1:bn for j in 1:bm for k
 #####################################
 # Error analysis
 #####################################
+setup = PointToPoint(r = B)
 
 # Block method
-block = prepare_containers(PointToPoint(r=0.), positions, ϵ, Nt, params);
+block = prepare_containers(setup, positions, ϵ, Nt, constants, nothing);
 Ib = zeros(length(positions), Nt)
 evolve!(Ib, q, block)
 
 # Convolution
-setup = PointToPoint(r = B)
-C = convolve_step(q, setup; params=params)
+C = convolve_step(q, setup; params=constants)
 
 # Error
 err = @. abs(Ib[1, :] - C)
@@ -46,7 +46,7 @@ err = @. abs(Ib[1, :] - C)
 Inh = zeros(Nt)
 
 # Precomputation
-block = @btime prepare_containers(PointToPoint(r=0.), positions, ϵ, Nt, params);
+block = @btime prepare_containers(setup, positions, ϵ, Nt, constants, nothing);
 precomp = @btime precompute_parameters(setup, params=params);
 
 # Simulation 

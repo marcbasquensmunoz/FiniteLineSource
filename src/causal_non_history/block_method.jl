@@ -46,7 +46,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     end
 
     Nr = filter!(e -> e != 0, unique(NR))
-    N, ND = choose_blocks(setup, sources, distances, Nr, Nt, ϵ/5, constants)
+    N, ND = choose_blocks(setup, sources, Nr, Nt, ϵ/5, constants)
     K = length(N) - 1
 
     #@show N, ND

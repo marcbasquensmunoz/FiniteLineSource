@@ -50,7 +50,7 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::SegmentToP
 
     z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2))) 
     a = 0.
-    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, Δt̃=Δt̃
+    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
         b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 - ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) )
     end
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
@@ -141,26 +141,81 @@ function bakhalov_discretization(N, setup, params::Constants)
     x[perm], w[perm], fx, expt, exptout, Ic, Icout
 end
 =#
-function choose_blocks(::SegmentToPoint, sources, distances, Nr, Nt, ϵ, constants)
+
+function minimum_distance(source, target)
+    σ = compute_distance_2D(source, target)
+    if target.D > source.D + source.H 
+        dist = sqrt(σ^2 + (target.D - source.D - source.H)^2)
+    elseif target.D + target.H < source.D 
+        dist = sqrt(σ^2 + (target.D + target.H - source.D )^2)
+    else 
+        dist = σ
+    end
+    return dist
+end
+
+function minimum_distance_line_to_point(source, target)
+    σ = compute_distance_2D(source, target)
+    z = target.D + target.H / 2
+    if source.D > z
+        dist = sqrt(σ^2 + (source.D - z)^2)
+    elseif source.D + source.H < z
+        dist = sqrt(σ^2 + (source.D + source.H - z)^2)
+    else 
+        dist = σ
+    end
+    return dist
+end
+
+function get_representative(sources)
+    min_dist = Inf
+    setup = SegmentToPoint(D=0., H=0., z=0., σ=0.)
+    for (i, s) in enumerate(sources)
+        for t in @views sources[1:i-1]
+            dist = min(minimum_distance_line_to_point(s, t), minimum_distance_line_to_point(t, s))
+            if dist < min_dist
+                min_dist = dist
+                setup = SegmentToPoint(D=s.D, H=s.H, z=t.D+t.H/2, σ=compute_distance_2D(s, t))
+            end
+        end
+    end
+    return setup, min_dist
+end
+
+function choose_blocks(::SegmentToPoint, sources, Nrr, Nt, ϵ, constants)
     @unpack kg, α, Δt, Δt̃, rb = constants
-    σ = minimum(filter(e -> e != 0, distances))
-
-    longest = argmax(map(s -> s.H, sources))
-    H = sources[longest].H
-    D = 0.
-    z = H/2
     ratio = 3.
+    setup, min_dist = get_representative(sources)
+    @unpack σ, D, H, z = setup
 
-    dline(h, N) = N <= 0 ? 0 : 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D-H/2+h)) - erf(s*(z-D-H/2-h)) - erf(s*(z-D)) + erf(s*(z-D-H))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ/100)[1]
+    dline = let σ=σ, D=D, H=H, z=z
+        (h, N) -> begin
+            if N <= 0 return 0. end
+            if D <= z <= D+H
+                return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(2 * erf(s*h) + erf(s*(z-D-H)) - erf(s*(z-D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ/100)[1]
+            elseif z < D
+                return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D-h)) - erf(s*(z-D-H))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ/100)[1]
+            else 
+                return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D-H+h)) - erf(s*(z-D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ/100)[1]
+            end
+        end
+    end
 
-    N = [Int(floor(find_zero(N -> dline(0, N) - ϵ, compute_N(σ, ϵ, constants))))]
-    ND = Float64[σ]
+    N = [Int(floor(find_zero(N -> dline(0, N) - ϵ, compute_N(min_dist, ϵ, constants))))]
+    ND = Float64[min_dist]
     i = 1
 
+    offset = 0.
+    if z < D  
+        offset =  D - z
+    elseif z > D + H
+        offset = z - D - H
+    end
+
     while true
-        d = σ * ratio^i
-        h = sqrt(d^2 - σ^2)
-        if h < H/2
+        d = sqrt(σ^2 + offset^2) * ratio^i
+        h = sqrt(d^2 - σ^2) - offset
+        if (D <= z <= D+H && h < H/2) || h < H 
             Nr = Int(floor(find_zero(N -> dline(h, N) - ϵ, compute_N(d, ϵ, constants)))) - 1
         else 
             Nr = compute_N(d, ϵ, constants)
@@ -173,21 +228,14 @@ function choose_blocks(::SegmentToPoint, sources, distances, Nr, Nt, ϵ, constan
     end
     if N[end] < Nt
         push!(N, Nt)
-        push!(ND, sqrt(H^2/4 + σ^2))
+        push!(ND, sqrt(σ^2 + max((z-D)^2, (z-D-H)^2)))
     end
     return N, ND
 end 
 
 function compute_distance(::SegmentToPoint, source, target, params, ϵ, Nt)
     σ = compute_distance_2D(source, target)
-    if target.D > source.D + source.H 
-        dist = sqrt(σ^2 + (target.D - source.D - source.H)^2)
-    elseif target.D + target.H < source.D 
-        dist = sqrt(σ^2 + (target.D + target.H - source.D )^2)
-    else 
-        dist = σ
-    end
-
+    dist = minimum_distance(source, target)
     N_r = compute_N(dist, ϵ, params) 
     dist, N_r
 end
@@ -196,7 +244,7 @@ function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N
     K = length(N) - 1
     σ = ND[1]
     for i in 1:K
-        H = min(2.2 * sqrt(ND[i+1]^2 - σ^2), maximum(map(e -> e.H, sources)))
+        H = min(2 * sqrt(ND[i+1]^2 - σ^2), maximum(map(e -> e.H, sources)))
         setup = SegmentToPoint(D=0., H=H, z=H/2, σ=σ)
         N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, ϵ´, n, setup, constants, containers)
         @views indices[i+1:end] .+= N_block
@@ -212,10 +260,20 @@ function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, const
         source = sources[j]
         target = sources[i]
         block = findfirst(range -> k in range, ranges)
-        h = sqrt(ND[block+1]^2 - σ^2)
         z_eval = target.D + target.H/2
-        D_eval = max(source.D, z_eval - h)
-        H_eval = min(source.D + source.H, z_eval + h) - D_eval
+        if z_eval < source.D  
+            h = sqrt(ND[block+1]^2 - σ^2) - (source.D - z_eval)
+            D_eval = source.D
+            H_eval = h
+        elseif z_eval > source.D + source.H
+            h = sqrt(ND[block+1]^2 - σ^2) - (z_eval - source.D - source.H)
+            D_eval = source.D + source.H - h
+            H_eval = h
+        else
+            h = sqrt(ND[block+1]^2 - σ^2)
+            D_eval = max(source.D, z_eval - h)
+            H_eval = min(source.D + source.H, z_eval + h) - D_eval
+        end
         setup = SegmentToPoint(D=D_eval, H=H_eval, z=z_eval, σ=σ)
         lineparams = LineKernelParams(setup, ζζ/rb, ϵ)
         @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_line(lineparams; containers=containers)
