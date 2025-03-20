@@ -14,8 +14,6 @@ using StaticArrays
 using SpecialFunctions
 using Roots
 using DataStructures
-using Flux
-using JLD2
 
 include("nonhistory/interface.jl")
 include("nonhistory/objects.jl")
@@ -49,12 +47,12 @@ export compute_self_response
 include("continuous/continuous.jl")
 export compute_coefficients_through_history, precompute_matrices, legendre_coeffs
 
+include("causal_non_history/asymptotic_integration.jl")
 include("causal_non_history/block_method.jl")
 include("causal_non_history/point_to_point.jl")
 include("causal_non_history/line_to_point.jl")
 include("causal_non_history/line_to_line.jl")
-include("causal_non_history/asymptotic_integration.jl")
-export choose_blocks
+export choose_blocks, AsymptoticContainers
 export compute_ζ_points!, compute_N
 export compute_ζ_points_line!, compute_N_line
 export LineKernelParams, compute_kernel_line, LineKernelContainers

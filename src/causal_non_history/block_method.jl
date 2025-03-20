@@ -22,24 +22,11 @@ end
     H
 end
 
-
-"""
-Computes the blocks to be used
-"""
-function choose_blocks(::Setup, Nr, Nt, ϵ, params)
-    if isempty(Nr) return [Nt] end
-    Nmin = minimum(Nr)
-    T = unique(min.([24*30, 10*8760, Nt], Nt))
-    Ns = findfirst(x -> x >= Nmin, T)
-    N = [Nmin]
-    append!(N, T[Ns:end])
-    return N
-end
-
 function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10
+    ϵ´ = 100ϵ
     Ns = length(sources)
     # Evaluation points 
     # DO NOT USE FOR SELF-RESPONSE
@@ -59,10 +46,10 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     end
 
     Nr = filter!(e -> e != 0, unique(NR))
-    N, ND = choose_blocks(setup, distances, Nr, Nt, ϵ, constants)
+    N, ND = choose_blocks(setup, sources, distances, Nr, Nt, ϵ/5, constants)
     K = length(N) - 1
 
-    @show N, ND
+    #@show N, ND
     for j in 1:Ns
         for i in 1:j-1
             last_block = findlast(x -> x <= NR[i, j], N)
@@ -76,7 +63,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     W = zeros(0)
     indices = zeros(Int64, K+1)
 
-    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ, constants=constants, containers=containers)
+    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ/K, ϵ´=ϵ´, constants=constants, containers=containers)
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 
@@ -103,7 +90,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     HM = zeros(length(ζ), length(sources), length(sources))
 
-    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ, containers=containers, N=N, ND=ND, ranges=ranges)
+    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ´, containers=containers, N=N, ND=ND, ranges=ranges)
 
     qin = zeros(length(ζ))
     qout = zeros(length(ζ))

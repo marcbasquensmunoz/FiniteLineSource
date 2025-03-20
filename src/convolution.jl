@@ -51,7 +51,7 @@ function step_response(t, model::SegmentToSegmentOld, params::Constants)
     @unpack α, kg = params
 
     I(s) = ierf((D2 - D1 + H2)*s) + ierf((D2 - D1 - H1)*s) - ierf((D2 - D1)*s) - ierf((D2 - D1 + H2 - H1)*s) 
-    return 1/(4π*kg) * quadgk(s -> exp(-σ^2 * s^2) / s^2 * I(s), 1/sqrt(4α*t), Inf, atol=eps())[1]
+    return 1/(4π*kg*H2) * quadgk(s -> exp(-σ^2 * s^2) / s^2 * I(s), 1/sqrt(4α*t), Inf, atol=eps())[1]
 
     #hcubature(z -> point_step_response(t, sqrt(σ^2 + (z[1]-z[2])^2), α, kg), [D1, D2], [D1+H1, D2+H2], abstol=1e-10)[1]
     atol = eps()

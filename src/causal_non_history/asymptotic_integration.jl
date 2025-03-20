@@ -105,6 +105,7 @@ function asymptotic(a, b, σ, ω, containers::AsymptoticContainers)
 end
 
 function find_integration_interval(ϵ, a, b, σ, ω, containers::AsymptoticContainers)
+    if ω == 0. return b end
     if a == σ a += (b-a)*0.01 end
     if asymptotic_error(a, b, σ, ω, containers) < ϵ return a end
     f = let b=b, σ=σ, ω=ω, containers=containers, ϵ=ϵ
@@ -114,5 +115,3 @@ function find_integration_interval(ϵ, a, b, σ, ω, containers::AsymptoticConta
     sol = solve(problem, Roots.Brent(), xatol=1e-0)
     return sol
 end
-
-(a, b, σ, ω) = (2.0, 75.02666192761077, 2.0, 29.235335194084737)

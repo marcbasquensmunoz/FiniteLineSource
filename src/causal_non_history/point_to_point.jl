@@ -15,6 +15,20 @@ function compute_r(N, ϵ, params::Constants)
     solve(problem, Roots.Brent(), xatol = 1e-2)
 end
 
+
+"""
+Computes the blocks to be used
+"""
+function choose_blocks(::PointToPoint, sources, distances, Nr, Nt, ϵ, constants)
+    if isempty(Nr) return [Nt] end
+    Nmin = minimum(Nr)
+    T = unique(min.([24*30, 10*8760, Nt], Nt))
+    Ns = findfirst(x -> x >= Nmin, T)
+    N = [Nmin]
+    append!(N, T[Ns:end])
+    return N, map(n -> compute_r(n, ϵ, constants), N)
+end
+
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
@@ -58,7 +72,7 @@ function compute_distance(::PointToPoint, source, target, params, ϵ, Nt)
     r, N_r
 end
 
-function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, n, ϵ, constants, containers=nothing)
+function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, ND, n, ϵ, ϵ´, constants, containers)
     K = length(N) - 1
     for i in 1:K
         N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, 1., n, constants)
@@ -66,7 +80,7 @@ function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, 
     end
 end
 
-function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers)
+function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, N, ND, ranges)
     @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
 
