@@ -26,6 +26,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10
+    expected_blocks = 5
     ϵ´ = 100ϵ
     Ns = length(sources)
     # Evaluation points 
@@ -46,7 +47,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     end
 
     Nr = filter!(e -> e != 0, unique(NR))
-    N, ND = choose_blocks(setup, sources, Nr, Nt, ϵ/5, constants)
+    N, ND = choose_blocks(setup, sources, Nt, ϵ/expected_blocks, constants)
     K = length(N) - 1
 
     #@show N, ND
@@ -63,7 +64,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     W = zeros(0)
     indices = zeros(Int64, K+1)
 
-    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ/K, ϵ´=ϵ´, constants=constants, containers=containers)
+    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ/K, ϵ´=ϵ´, constants=constants)
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 

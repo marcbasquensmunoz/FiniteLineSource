@@ -19,13 +19,15 @@ end
 """
 Computes the blocks to be used
 """
-function choose_blocks(::PointToPoint, sources, Nr, Nt, ϵ, constants)
+function choose_blocks(::PointToPoint, sources, Nt, ϵ, constants)
     if isempty(Nr) return [Nt] end
-    Nmin = minimum(Nr)
-    T = unique(min.([24*30, 10*8760, Nt], Nt))
-    Ns = findfirst(x -> x >= Nmin, T)
-    N = [Nmin]
-    append!(N, T[Ns:end])
+    Ncurrent = minimum(Nr)
+    N = Int[]
+    while Ncurrent < Nt
+        push!(N, Ncurrent)
+        Ncurrent *= 10
+    end
+    push!(N, Nt)
     return N, map(n -> compute_r(n, ϵ, constants), N)
 end
 
@@ -33,11 +35,9 @@ end
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
 function compute_ζ_points!(ζ, W, N, No, ϵ, Q, n, params::Constants)
-    @unpack Δt, α, rb = params
-    Δt̃ = Δt*α/rb^2
+    @unpack Δt, α, rb, Δt̃ = params
 
-    heatwave(r) = erfc(r/sqrt(4α*N*Δt)) / r - ϵ
-    r = find_zero(heatwave, sqrt(N))
+    r = compute_r(N, ϵ, params) 
     a = 0.
     b = sqrt(-log(ϵ/Q) / (N*Δt̃))
     r̃ = r/rb
@@ -72,7 +72,7 @@ function compute_distance(::PointToPoint, source, target, params, ϵ, Nt)
     r, N_r
 end
 
-function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, ND, n, ϵ, ϵ´, constants, containers)
+function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, ND, n, ϵ, ϵ´, constants)
     K = length(N) - 1
     for i in 1:K
         N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, 1., n, constants)

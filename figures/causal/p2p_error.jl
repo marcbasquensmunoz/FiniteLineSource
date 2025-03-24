@@ -11,7 +11,7 @@ kg = 3.
 rb = 0.1
 Δt = 3600.
 
-Nt = 1000
+Nt = 20000
 
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 q = [1. for t in 1:Nt]
@@ -33,7 +33,7 @@ end
 
 
 r_range = 0.7:0.01:10.
-ϵ_range = [1e-6, 1e-8, 1e-10, 1e-12, 1e-14]
+ϵ_range = [1e-4, 1e-6, 1e-8, 1e-10, 1e-12, 1e-14]
 
 res = zeros(length(r_range), length(ϵ_range))
 
@@ -43,7 +43,7 @@ for (i, ϵ) in enumerate(ϵ_range)
 end
 
 fig = Figure()
-ax = Axis(fig[1, 1], xlabel = L"r", ylabel = L"\log_{10} \Vert \epsilon _{\infty} \Vert", title = L"\text{Error in the point to point case}")
+ax = Axis(fig[1, 1], xlabel = L"r", ylabel = L"\log_{10} \Vert \epsilon  \Vert_{\infty}", title = L"\text{Error in the point to point case}")
 
 for (i, ϵ) in enumerate(ϵ_range)
     lines!(ax, r_range, log10.(res[:, i]), label = L"\epsilon = 10^{%$(Int(log10(ϵ)))}")

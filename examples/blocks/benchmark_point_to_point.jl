@@ -3,24 +3,18 @@ using BenchmarkTools
 
 ϵ = 1e-6
 Δt = 3600.
-Nt = 1000
-
-bn = 2
-bm = 1
-bl = 1
+Nt = 20000
 
 α = 1e-6
 kg = 3.
 rb = 0.1
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 
-Δt̃ = Δt*α/rb^2
-
-B = 0.7
+B = 5.3
 
 q = [1. for t in 1:Nt]
 
-positions = [(B*(i-1)^2, B*(j-1)^2, B*(k-1)^2) for i in 1:bn for j in 1:bm for k in 1:bl]
+positions = [(0., 0., 0.), (B, 0., 0.)]
 
 
 #####################################

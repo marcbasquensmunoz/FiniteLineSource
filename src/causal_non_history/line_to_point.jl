@@ -44,7 +44,7 @@ end
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
-function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::SegmentToPoint, params::Constants, containers::AsymptoticContainers)
+function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::SegmentToPoint, params::Constants)
     @unpack Δt, α, rb, kg, Δt̃  = params
     @unpack D, H, z, σ = presetup
 
@@ -167,7 +167,7 @@ function minimum_distance_line_to_point(source, target)
     return dist
 end
 
-function get_representative(sources)
+function get_representative_ltp(sources)
     min_dist = Inf
     setup = SegmentToPoint(D=0., H=0., z=0., σ=0.)
     for (i, s) in enumerate(sources)
@@ -182,12 +182,31 @@ function get_representative(sources)
     return setup, min_dist
 end
 
-function choose_blocks(::SegmentToPoint, sources, Nrr, Nt, ϵ, constants)
+function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
     @unpack kg, α, Δt, Δt̃, rb = constants
     ratio = 3.
-    setup, min_dist = get_representative(sources)
+    setup, min_dist = get_representative_ltp(sources)
     @unpack σ, D, H, z = setup
 
+
+    #=
+    ## This works, but needs to be debugged for allocations
+    dline = let setup=setup, constants=constants
+        (h, N) -> begin 
+            if N <= 0 return 0. end
+            @unpack α, kg, Δt = constants
+            @unpack D, H, z, σ = setup
+            integrand(s) = abs(exp(-σ^2 * s^2) / s * (
+                erf(s * min(z - D, h)) 
+                - erf(s * max(z - D - H, -h))
+                - erf(s * (z-D))
+                + erf(s * (z-D-H))
+            ))        
+            return 1 / (4π * kg) * quadgk(integrand, 1 / sqrt(4α*Δt*N), Inf)[1]
+        end
+    end
+    =#
+    
     dline = let σ=σ, D=D, H=H, z=z
         (h, N) -> begin
             if N <= 0 return 0. end
@@ -216,7 +235,7 @@ function choose_blocks(::SegmentToPoint, sources, Nrr, Nt, ϵ, constants)
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
         if (D <= z <= D+H && h < H/2) || h < H 
-            Nr = Int(floor(find_zero(N -> dline(h, N) - ϵ, compute_N(d, ϵ, constants)))) - 1
+            Nr = Int(floor(find_zero(N -> dline(h, N) - ϵ, compute_N(d, ϵ, constants))))
         else 
             Nr = compute_N(d, ϵ, constants)
         end
@@ -240,13 +259,13 @@ function compute_distance(::SegmentToPoint, source, target, params, ϵ, Nt)
     dist, N_r
 end
 
-function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N, ND, n, ϵ, ϵ´, constants, containers)
+function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N, ND, n, ϵ, ϵ´, constants)
     K = length(N) - 1
     σ = ND[1]
     for i in 1:K
         H = min(2 * sqrt(ND[i+1]^2 - σ^2), maximum(map(e -> e.H, sources)))
         setup = SegmentToPoint(D=0., H=H, z=H/2, σ=σ)
-        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, ϵ´, n, setup, constants, containers)
+        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, ϵ´, n, setup, constants)
         @views indices[i+1:end] .+= N_block
     end
 end

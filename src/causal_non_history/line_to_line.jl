@@ -4,19 +4,15 @@
     r2
     r3
     r4
-    rs
     α1
     α2
     α3
     ω
     σ
     ϵ
-    n1::Int
-    n2::Int
-    n3::Int
 end
 
-function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ, nmodel)
+function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ, h=nothing)
     @unpack D1, H1, D2, H2, σ = setup
 
     rLR = sqrt(σ^2 + (D2 - D1 - H1)^2     ) 
@@ -29,150 +25,253 @@ function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ, nmodel)
     r3 = H2 > H1 ? (D2 + H2 > D1 + H1 ? rUR : σ) : (D2 > D1 ? rLL : σ)
     r4 = D2 + H2 > D1 ? rUL : σ
 
-    #rs = r1 + 4π/ω
-    rt = r1 == r2 ? (r1 == r3 ? r4 : r3) : r2
-    rs = min(r1 + max(2, (rt-r1) * 0.01), rt)
-
     α1 = D1 - D2 + H1
     α2 = min(H1, H2)
     α3 = D2 - D1 + H2
-    n1, n2, n3 = 0, 0, 0
 
-    if r1 != r2
-        n1 = N_bound(ϵ / (3α1 * sqrt(r2-rs)), rs, r2, σ, nmodel)
-    end
-
-    if r2 != r3
-        rl = max(r2, rs)
-        n2 = N_bound(ϵ / (3α2 * sqrt(r3-rl)), rl, r3, σ, nmodel)
-    end
-
-    if r3 != r4
-        rl = max(r3, rs)
-        n3 = N_bound(ϵ / (3α3 * sqrt(r4-rl)), rl, r4, σ, nmodel)
-    end
-
-    LineToLineKernelParams(r1=r1, r2=r2, r3=r3, r4=r4, rs=rs, α1=α1, α2=α2, α3=α3, ω=ω, σ=σ, ϵ=ϵ, n1=n1, n2=n2, n3=n3)
+    d = isnothing(h) ? Inf : sqrt(σ^2 + h^2)
+    LineToLineKernelParams(r1=min(r1, d), r2=min(r2, d), r3=min(r3, d), r4=min(r4, d), α1=α1, α2=α2, α3=α3, ω=ω, σ=σ, ϵ=ϵ)
 end
 
-
-function compute_kernel_double_line_part(params::LineToLineKernelParams; BV1, BV2, BV3)
-    @unpack r1, r2, r3, r4, rs, ω, ϵ, α1, α2, α3, σ = params
-
-    h(r) = r < r2 ? α1 : (r < r3 ? α2 : α3)
-    I_div = 0.
-    I_osc = 0.
-
-    if r1 == σ
-        mult = r1 == r2 ? (r2 == r3 ? α3 : α2) : α1
-        C = mult * sin(σ*ω)
-        h_reg(r) = r == σ ? 0. : (sin(r*ω) * h(r) - C) / sqrt(r^2-σ^2)
-        I1, _ = quadgk(h_reg, r1, rs, atol=ϵ/3)
-        I2 = C * acoth(rs/sqrt(rs^2-r1^2))
-        I_div = I1 + I2
+function minimum_distance_line_to_line(source, target)
+    σ = compute_distance_2D(source, target)
+    if target.D > source.D + source.H
+        dist = sqrt(σ^2 + (target.D - source.D - source.H)^2)
+    elseif source.D > target.D + target.H
+        dist = sqrt(σ^2 + (source.D - target.D - target.H)^2)
+    else 
+        dist = σ
     end
-
-    if r1 != r2
-        x1 = BV1.x
-        X1 = BV1.X
-        P1 = BV1.P
-        f1 = BV1.f
-        n1 = BV1.n
-
-        m1 = (r2-rs)/2
-        c1 = (r2+rs)/2
-        @. X1 = m1*x1 + c1
-
-        @. f1 = α1 / sqrt(X1^2-σ^2)
-        besselj!(X1, 1/2:(n1+1/2), m1*ω)
-        @. X1 = X1 * imag(exp(im*ω*c1) * im^(0:n1)) * (2(0:n1)+1)
-        I_osc += sqrt(m1*π/(2ω)) * dot(X1, P1, f1)
-    end
-
-    if r2 != r3    
-        x2 = BV2.x
-        X2 = BV2.X
-        P2 = BV2.P
-        f2 = BV2.f
-        n2 = BV2.n
-
-        rl = max(rs, r2)
-        m2 = (r3-rl)/2
-        c2 = (r3+rl)/2
-        @. X2 = m2*x2 + c2
-
-        @. f2 = α2 / sqrt(X2^2-σ^2)
-        besselj!(X2, 1/2:(n2+1/2), m2*ω)
-        @. X2 = X2 * imag(exp(im*ω*c2) * im^(0:n2)) * (2(0:n2)+1)
-        I_osc += sqrt(m2*π/(2ω)) * dot(X2, P2, f2)
-    end
-
-    if r3 != r4
-        x3 = BV3.x
-        X3 = BV3.X
-        P3 = BV3.P
-        f3 = BV3.f
-        n3 = BV3.n
-
-        rl = max(rs, r3)
-        m3 = (r4-rl)/2
-        c3 = (r4+rl)/2
-        @. X3 = m3*x3 + c3
-
-        @. f3 = α3 / sqrt(X3^2-σ^2)
-        besselj!(X3, 1/2:(n3+1/2), m3*ω)
-        @. X3 = X3 * imag(exp(im*ω*c3) * im^(0:n3)) * (2(0:n3)+1)
-        I_osc += sqrt(m3*π/(2ω)) * dot(X3, P3, f3)
-    end
-    I_osc_linear = (cos(ω*r1) - cos(ω*r2) - cos(ω*r3) + cos(ω*r4))/ω
-    I_div + I_osc + I_osc_linear
+    return dist
 end
 
-function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::LineToLineKernelParams; BV1, BV2, BV3)
-    I1 = compute_kernel_double_line_part(params, BV1=BV1, BV2=BV2, BV3=BV3)
-    I2 = compute_kernel_double_line_part(paramsT, BV1=BV1, BV2=BV2, BV3=BV3)
+function get_representative_ltl(sources)
+    min_dist = Inf
+    setup = SegmentToSegment(D1=0., H1=0., D2=0., H2=0., σ=0.)
+    for (i, s) in enumerate(sources)
+        for t in @views sources[1:i-1]
+            dist = minimum_distance_line_to_line(s, t)
+            if dist < min_dist
+                min_dist = dist
+                setup = SegmentToSegment(D1=s.D, H1=s.H, D2=t.D, H2=t.H, σ=compute_distance_2D(s, t))
+            end
+        end
+    end
+    return setup, min_dist
+end
+
+ierf(x) = x*erf(x) - 1/sqrt(π)*(1- exp(-x^2))
+function I_L2L(h, N, setup, constants)
+    if N <= 0 return 0. end
+    @unpack α, kg, Δt = constants
+    @unpack D1, H1, D2, H2, σ = setup
+    P = min(H2, D2 + H2 - D1 - h) + min(H2, D1 + H1 - D2 - h)
+    M1 = min(D2 + H2 - D1, h)
+    M2 = min(D1 + H1 - D2, h)
+    A1 = (D2 + H2 - D1)
+    A2 = (D1 + H1 - D2)
+    integrand(s) = exp(-σ^2 * s^2) / s * abs((ierf(s * M1) + ierf(s * M2) - ierf(s * A1) - ierf(s * A2)) / s + erf(s * h) * P)            
+    return 1 / (4π*kg * H2) * quadgk(integrand, 1/sqrt(4α*Δt*N), Inf)[1]
+end
+
+function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
+    @unpack kg, α, Δt, Δt̃, rb = constants
+
+    ratio = 3.
+    setup, min_dist = get_representative_ltl(sources)
+    @unpack D1, H1, D2, H2, σ = setup
+
+    N = [Int(floor(find_zero(N -> I_L2L(0., N, setup, constants) - ϵ, compute_N(min_dist, ϵ, constants))))]
+    ND = Float64[min_dist]
+    i = 1
+
+    offset = 0.
+    if D1 + H1 < D2  
+        offset =  D2 - D1 - H1
+    elseif D1 > D2 + H2
+        offset = D1 - D2 - H2
+    end
+
+    while true
+        d = sqrt(σ^2 + offset^2) * ratio^i
+        h = sqrt(d^2 - σ^2) - offset
+        if h < H2/2
+            Nr = Int(floor(find_zero(N -> I_L2L(h, N, setup, constants) - ϵ, compute_N(d, ϵ, constants), xatol=1.))) - 1
+        else 
+            Nr = compute_N(d, ϵ, constants)
+        end
+        i += 1
+        if Nr < N[end] continue end
+        if Nr > Nt || Nt * 0.75 < Nr < Nt break end
+        push!(N, Nr)
+        push!(ND, d)
+    end
+    if N[end] < Nt
+        push!(N, Nt)
+        push!(ND, sqrt(σ^2 + max((D1-D2-H2)^2, (D2-D1-H1)^2)))
+    end
+    return N, ND
+end 
+
+zero_freq(a, b, σ) = log( ( (b+sqrt(b^2-σ^2)) * (-a+sqrt(a^2-σ^2)) ) / ( (a+sqrt(a^2-σ^2)) * (-b+sqrt(b^2-σ^2)) ) ) / 2
+
+function compute_kernel_double_line_part(params::LineToLineKernelParams; containers)
+    @unpack r1, r2, r3, r4, ω, ϵ, α1, α2, α3, σ = params
+
+    if ω == 0.
+        return r2 + r3 - r1 - r4 + zero_freq(r1, r2, σ) * α1 + zero_freq(r2, r3, σ) * α2 + zero_freq(r3, r4, σ) * α3
+    end
+        
+    I = (cos(ω*r1) - cos(ω*r2) - cos(ω*r3) + cos(ω*r4))/ω
+
+    H = let ω=ω, σ=σ
+        t -> sin(ω * σ * cosh(t))
+    end
+
+    if r3 != r4 
+        I3 = 0.
+        if r1 == r3
+            a = find_integration_interval(ϵ/4, r3, r4, σ, ω, containers)
+            I3 += asymptotic(a, r4, σ, ω, containers)
+        else 
+            a = r4
+        end
+        I3 += quadgk(H, acosh(r3/σ), acosh(a/σ), atol=ϵ/4)[1]
+        I += α3 * I3
+    end
+    if r2 != r3 
+        I2 = 0.
+        if r1 == r2
+            a = find_integration_interval(ϵ/4, r2, r3, σ, ω, containers)
+            I2 += asymptotic(a, r3, σ, ω, containers)
+        else
+            a = r3
+        end
+        I2 += quadgk(H, acosh(r2/σ), acosh(a/σ), atol=ϵ/4)[1]
+        I += α2 * I2
+    end
+    if r1 != r2
+        a = find_integration_interval(ϵ/4, r1, r2, σ, ω, containers)
+        I1 = asymptotic(a, r2, σ, ω, containers)
+        I2, _ = quadgk(H, acosh(r1/σ), acosh(a/σ), atol=ϵ/4)
+        I += α1 * (I1 + I2)
+    end
+    return I
+end
+
+function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::LineToLineKernelParams; containers)
+    I1 = compute_kernel_double_line_part(params, containers=containers)
+    I2 = compute_kernel_double_line_part(paramsT, containers=containers)
     (I1+I2)
 end
 
-function compute_distance(::SegmentToSegment, source, target, params, ϵ)
+function compute_N_line_to_line(ϵ, Nt, setup::SegmentToSegment, params::Constants) 
+    @unpack σ, D1, H1, D2, H2 = setup
+    @unpack α, kg, Δt = params
+
+    z_mid = D1+H1/2
+    if D2 <= z_mid <= D2+H2
+        z_r_min = z_mid
+    else
+        z_r_min = abs(z_mid-D2) < abs(z_mid-D2-H2) ? D2 : D2+H2
+    end
+
+    I_stp = let D=D1, H=H1, z=z_r_min
+        s -> erf(s * (z-D)) - erf(s * (z-D-H))
+    end
+    f = let kg=kg, σ=σ, α=α, Δt=Δt
+        N -> 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * I_stp(s), 1/sqrt(4*α*Δt*N), Inf)[1] - ϵ
+    end
+    if f(1)*f(Nt) > 0 return Nt end
+    problem = ZeroProblem(f, 10σ^2)
+    sol = solve(problem, xtol=1.)
+    Int(floor(sol))
+end
+
+function compute_distance(::SegmentToSegment, source, target, params, ϵ, Nt)
     σ = compute_distance_2D(source, target)
-    setup = SegmentToPoint(D=source.D, H=source.H, z=target.D + target.H / 2 , σ=σ)
-    N_r = compute_N_line(ϵ, setup, params)
+    setup = SegmentToSegment(D1=source.D, H1=source.H, D2=target.D, H2=target.H, σ=σ)
+    N_r = compute_N_line_to_line(ϵ, Nt, setup, params)
     σ, N_r
 end
 
-function compute_ζ_discretization!(ζ, W, indices, ::SegmentToSegment; sources, N, n, ϵ, constants, nmodel)
+"""
+Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
+"""
+function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::SegmentToSegment, constants::Constants)
+    @unpack Δt, α, rb, kg, Δt̃ = constants
+    @unpack D1, H1, D2, H2, σ = presetup
+    β = let σ=σ
+        d -> sqrt(σ^2+d^2) + d * log(sqrt(σ^2+d^2) - d)
+    end
+    z_int = 1/(4π*kg*H2) * (β(D1+H1-D2-H2) + β(D1-D2) - β(D1-H2-D2) - β(D1+H1-D2))
+
+    a = 0.
+    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
+        b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 - ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) )# - ϵ
+    end    
+    problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
+    sol_b = solve(problem)
+    b = isnan(sol_b) || sol_b == 0 ? sqrt(-log(ϵ) / (N*Δt̃)) : sol_b
+  
+    params = LineToLineKernelParams(presetup, 0., ϵ)
+    paramsT = LineToLineKernelParams(transpose(presetup), 0., ϵ)
+    ω1 = min(params.r1, paramsT.r1)
+    ω2 = max(params.r4, paramsT.r4)
+    guide = let N=N, No=No, Δt̃=Δt̃, rb=rb, ω1=ω1, ω2=ω2
+        aa(ζ) = sin(ω1/rb * ζ) / ζ / ω1 
+        bb(ζ) = sin(ω2/rb * ζ) / ζ / ω2
+        ζ -> (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (aa(ζ)-bb(ζ)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+    end
+    _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
+
+    sort!(segbuf, by=x->x.a)
+    n_seg = length(segbuf)
+
+    Nζ = n_seg*n
+    Hs = Int(floor(n/2))
+    p = n%2
+
+    append!(ζ, zeros(Nζ))
+    append!(W, zeros(Nζ))
+    x, _, w = QuadGK.cachedrule(Float64, n)
+
+    for (i, segment) in enumerate(segbuf)
+        m = (segment.b-segment.a)/2
+        c = (segment.b+segment.a)/2 
+        @inbounds @views @. ζ[end-(n_seg-i+1)*n+1:end-(n_seg-i)*n-Hs] = m * x[2:2:end-1+p] + c
+        @inbounds @views @. ζ[end-(n_seg-i+1)*n+1+Hs+p:end-(n_seg-i)*n] = -m * x[end-1-p:-2:2] + c
+        @inbounds @views @. W[end-(n_seg-i+1)*n+1:end-(n_seg-i)*n-Hs] = m * w
+        @inbounds @views @. W[end-(n_seg-i+1)*n+1+Hs+p:end-(n_seg-i)*n] = m * w[end-p:-1:1]
+    end
+    return Nζ
+end
+
+function compute_ζ_discretization!(ζ, W, indices, ::SegmentToSegment; sources, N, ND, n, ϵ, ϵ´, constants)
     K = length(N) - 1
-    D_eff = sum([source.D for source in sources])/length(sources)
-    H_eff = sum([source.H for source in sources])/length(sources)
-    z_eff = D_eff + H_eff/2
+    σ = ND[1]
     for i in 1:K
-        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, n, D_eff, H_eff, z_eff, constants, nmodel)
+        H = min(2 * sqrt(ND[i+1]^2 - σ^2), maximum(map(e -> e.H, sources)))
+        setup = SegmentToSegment(D1=0., H1=H, D2=0., H2=H, σ=σ)
+        N_block = compute_ζ_points_line_to_line!(ζ, W, N[i], N[i+1], ϵ, ϵ´, n, setup, constants)
         @views indices[i+1:end] .+= N_block
     end
 end
 
-function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, nmodel)
+function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, N, ND, ranges)
     @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
-
-    bins = [10, 20, 30, 40, 50, 60, 70, 80, 100, 125, 150, 175, 200, 250]
-    containers = create_bin_containers(bins)
-
     for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
         σ = i == j ? rb : distances[i, j]
         source = sources[j]
         target = sources[i]
-
+        block = findfirst(range -> k in range, ranges)
+        h = sqrt(ND[block+1]^2 - σ^2)
         setup = SegmentToSegment(D1=source.D, H1=source.H, D2=target.D, H2=target.H, σ=σ)
-        lineparams = FiniteLineSource.LineToLineKernelParams(setup, ζζ/rb, ϵ, nmodel)
-        lineparamsT =FiniteLineSource.LineToLineKernelParams(transpose(setup), ζζ/rb, ϵ, nmodel)
+        lineparams = FiniteLineSource.LineToLineKernelParams(setup, ζζ/rb, ϵ, h)
+        lineparamsT = FiniteLineSource.LineToLineKernelParams(transpose(setup), ζζ/rb, ϵ, h)
 
-        bin1 = FiniteLineSource.get_bin(max(lineparams.n1, lineparamsT.n1), bins)
-        bin2 = FiniteLineSource.get_bin(max(lineparams.n2, lineparamsT.n2), bins)
-        bin3 = FiniteLineSource.get_bin(max(lineparams.n3, lineparamsT.n3), bins)
-
-        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_double_line(lineparams, lineparamsT; BV1=containers[bin1], BV2=containers[bin2], BV3=containers[bin3])
+        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_double_line(lineparams, lineparamsT; containers=containers)
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end
