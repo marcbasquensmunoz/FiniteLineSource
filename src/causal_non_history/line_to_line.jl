@@ -60,6 +60,9 @@ function get_representative_ltl(sources)
     return setup, min_dist
 end
 
+
+int_exp_ierf(x, L, σ) = x/2 * gamma(0, σ^2*L^2) - exp(-σ^2*L^2) / L / sqrt(π) + σ*erfc(σ*L) + exp(-(σ^2+x^2)*L^2) / L / sqrt(π) - sqrt(σ^2+x^2)*erfc(sqrt(σ^2+x^2)*L) 
+
 ierf(x) = x*erf(x) - 1/sqrt(π)*(1- exp(-x^2))
 function I_L2L(h, N, setup, constants)
     if N <= 0 return 0. end
@@ -68,10 +71,32 @@ function I_L2L(h, N, setup, constants)
     P = min(H2, D2 + H2 - D1 - h) + min(H2, D1 + H1 - D2 - h)
     M1 = min(D2 + H2 - D1, h)
     M2 = min(D1 + H1 - D2, h)
-    A1 = (D2 + H2 - D1)
-    A2 = (D1 + H1 - D2)
-    integrand(s) = exp(-σ^2 * s^2) / s * abs((ierf(s * M1) + ierf(s * M2) - ierf(s * A1) - ierf(s * A2)) / s + erf(s * h) * P)            
-    return 1 / (4π*kg * H2) * quadgk(integrand, 1/sqrt(4α*Δt*N), Inf)[1]
+    A1 = D2 + H2 - D1
+    A2 = D1 + H1 - D2
+
+    threshold = 10*sqrt(4α*Δt*N)
+    fA = let threshold=threshold, A1=A1, A2=A2
+        s -> begin
+            res = 0.
+            if A1 < threshold 
+                res += ierf(s * A1)
+            end
+            if A2 < threshold
+                res += ierf(s * A2)
+            end 
+            res  
+        end
+    end
+    IA = 0.
+    if A1 > threshold 
+        IA += int_exp_ierf(A1, 1/sqrt(4α*Δt*N), σ)
+    end
+    if A2 > threshold
+        IA += int_exp_ierf(A2, 1/sqrt(4α*Δt*N), σ) 
+    end    
+
+    integrand(s) = exp(-σ^2 * s^2) / s * ((ierf(s * M1) + ierf(s * M2) - fA(s)) / s + erf(s * h) * P)      
+    return 1 / (4π*kg * H2) * abs(quadgk(integrand, 1/sqrt(4α*Δt*N), Inf)[1] - IA)
 end
 
 function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
@@ -96,7 +121,7 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
         if h < H2/2
-            Nr = Int(floor(find_zero(N -> I_L2L(h, N, setup, constants) - ϵ, compute_N(d, ϵ, constants), xatol=1.))) - 1
+            Nr = Int(floor(find_zero(N -> I_L2L(h, N, setup, constants) - ϵ, compute_N(d, ϵ, constants), xatol=1.)))
         else 
             Nr = compute_N(d, ϵ, constants)
         end
@@ -131,29 +156,29 @@ function compute_kernel_double_line_part(params::LineToLineKernelParams; contain
     if r3 != r4 
         I3 = 0.
         if r1 == r3
-            a = find_integration_interval(ϵ/4, r3, r4, σ, ω, containers)
+            a = find_integration_interval(ϵ/(3*α3), r3, r4, σ, ω, containers)
             I3 += asymptotic(a, r4, σ, ω, containers)
         else 
             a = r4
         end
-        I3 += quadgk(H, acosh(r3/σ), acosh(a/σ), atol=ϵ/4)[1]
+        I3 += quadgk(H, acosh(r3/σ), acosh(a/σ), atol=ϵ/(3*α3))[1]
         I += α3 * I3
     end
     if r2 != r3 
         I2 = 0.
         if r1 == r2
-            a = find_integration_interval(ϵ/4, r2, r3, σ, ω, containers)
+            a = find_integration_interval(ϵ/(3*α2), r2, r3, σ, ω, containers)
             I2 += asymptotic(a, r3, σ, ω, containers)
         else
             a = r3
         end
-        I2 += quadgk(H, acosh(r2/σ), acosh(a/σ), atol=ϵ/4)[1]
+        I2 += quadgk(H, acosh(r2/σ), acosh(a/σ), atol=ϵ/(3*α2))[1]
         I += α2 * I2
     end
     if r1 != r2
-        a = find_integration_interval(ϵ/4, r1, r2, σ, ω, containers)
+        a = find_integration_interval(ϵ/(3*α1), r1, r2, σ, ω, containers)
         I1 = asymptotic(a, r2, σ, ω, containers)
-        I2, _ = quadgk(H, acosh(r1/σ), acosh(a/σ), atol=ϵ/4)
+        I2, _ = quadgk(H, acosh(r1/σ), acosh(a/σ), atol=ϵ/(3*α1))
         I += α1 * (I1 + I2)
     end
     return I
@@ -165,34 +190,10 @@ function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::Lin
     (I1+I2)
 end
 
-function compute_N_line_to_line(ϵ, Nt, setup::SegmentToSegment, params::Constants) 
-    @unpack σ, D1, H1, D2, H2 = setup
-    @unpack α, kg, Δt = params
-
-    z_mid = D1+H1/2
-    if D2 <= z_mid <= D2+H2
-        z_r_min = z_mid
-    else
-        z_r_min = abs(z_mid-D2) < abs(z_mid-D2-H2) ? D2 : D2+H2
-    end
-
-    I_stp = let D=D1, H=H1, z=z_r_min
-        s -> erf(s * (z-D)) - erf(s * (z-D-H))
-    end
-    f = let kg=kg, σ=σ, α=α, Δt=Δt
-        N -> 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * I_stp(s), 1/sqrt(4*α*Δt*N), Inf)[1] - ϵ
-    end
-    if f(1)*f(Nt) > 0 return Nt end
-    problem = ZeroProblem(f, 10σ^2)
-    sol = solve(problem, xtol=1.)
-    Int(floor(sol))
-end
-
 function compute_distance(::SegmentToSegment, source, target, params, ϵ, Nt)
-    σ = compute_distance_2D(source, target)
-    setup = SegmentToSegment(D1=source.D, H1=source.H, D2=target.D, H2=target.H, σ=σ)
-    N_r = compute_N_line_to_line(ϵ, Nt, setup, params)
-    σ, N_r
+    dist = minimum_distance(source, target)
+    N_r = compute_N(dist, ϵ, params) 
+    dist, N_r
 end
 
 """
@@ -208,7 +209,7 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
 
     a = 0.
     f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
-        b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 - ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) )# - ϵ
+        b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 + ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) ) - ϵ
     end    
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
     sol_b = solve(problem)
@@ -218,13 +219,14 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     paramsT = LineToLineKernelParams(transpose(presetup), 0., ϵ)
     ω1 = min(params.r1, paramsT.r1)
     ω2 = max(params.r4, paramsT.r4)
+
     guide = let N=N, No=No, Δt̃=Δt̃, rb=rb, ω1=ω1, ω2=ω2
         aa(ζ) = sin(ω1/rb * ζ) / ζ / ω1 
         bb(ζ) = sin(ω2/rb * ζ) / ζ / ω2
-        ζ -> (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (aa(ζ)-bb(ζ)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+        ζ -> ζ == 0 ? 0. : (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (aa(ζ)-bb(ζ)) * (1 - exp(-ζ^2*Δt̃)) / ζ
     end
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
-
+    
     sort!(segbuf, by=x->x.a)
     n_seg = length(segbuf)
 
@@ -258,7 +260,7 @@ function compute_ζ_discretization!(ζ, W, indices, ::SegmentToSegment; sources,
     end
 end
 
-function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, N, ND, ranges)
+function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
     @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
     for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)

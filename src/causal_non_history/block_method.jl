@@ -46,7 +46,6 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         end
     end
 
-    Nr = filter!(e -> e != 0, unique(NR))
     N, ND = choose_blocks(setup, sources, Nt, ϵ/expected_blocks, constants)
     K = length(N) - 1
 
@@ -91,7 +90,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     HM = zeros(length(ζ), length(sources), length(sources))
 
-    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ´, containers=containers, N=N, ND=ND, ranges=ranges)
+    compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ´, containers=containers, ND=ND, ranges=ranges)
 
     qin = zeros(length(ζ))
     qout = zeros(length(ζ))

@@ -51,7 +51,7 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::SegmentToP
     z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2))) 
     a = 0.
     f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
-        b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 - ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) )
+        b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 + ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) ) - ϵ
     end
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
 
@@ -106,9 +106,9 @@ function compute_kernel_line(params::LineKernelParams; containers)
     end
 
     if r1 != r2
-        a = find_integration_interval(ϵ/3, r1, r2, σ, ω, containers)
+        a = find_integration_interval(ϵ/6, r1, r2, σ, ω, containers)
         I1 = asymptotic(a, r2, σ, ω, containers)
-        I2, _ = quadgk(H, acosh(r1/σ), acosh(a/σ), atol=ϵ/3)
+        I2, _ = quadgk(H, acosh(r1/σ), acosh(a/σ), atol=ϵ/6)
         I += 2 * (I1 + I2)
     end
     return I 
@@ -220,7 +220,8 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
         end
     end
 
-    N = [Int(floor(find_zero(N -> dline(0, N) - ϵ, compute_N(min_dist, ϵ, constants))))]
+    Nmin = compute_N(min_dist, ϵ, constants)
+    N = [Int(floor(find_zero(N -> dline(0, N) - ϵ, Nmin == Inf ? Nt : Nmin)))]
     ND = Float64[min_dist]
     i = 1
 
@@ -235,7 +236,8 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
         if (D <= z <= D+H && h < H/2) || h < H 
-            Nr = Int(floor(find_zero(N -> dline(h, N) - ϵ, compute_N(d, ϵ, constants))))
+            Nd = compute_N(d, ϵ, constants)
+            Nr = Int(floor(find_zero(N -> dline(h, N) - ϵ, Nd == Inf ? Nt : Nd)))
         else 
             Nr = compute_N(d, ϵ, constants)
         end
@@ -253,7 +255,6 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
 end 
 
 function compute_distance(::SegmentToPoint, source, target, params, ϵ, Nt)
-    σ = compute_distance_2D(source, target)
     dist = minimum_distance(source, target)
     N_r = compute_N(dist, ϵ, params) 
     dist, N_r
@@ -270,7 +271,7 @@ function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N
     end
 end
 
-function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, N, ND, ranges)
+function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
     @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
 

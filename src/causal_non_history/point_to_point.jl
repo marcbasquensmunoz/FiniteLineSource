@@ -4,8 +4,11 @@ compute_distance_3D(x, y) = sqrt((x[1] - y[1])^2 + (x[2] - y[2])^2 + (x[3] - y[3
 """
 Compute the number of steps N that can be skipped for a given distance r
 """
-function compute_N(r, ϵ, params::Constants) 
+function compute_N(r, ϵ, params::Constants, Nt=Inf) 
     @unpack Δt, α, kg = params
+    if 4*π*r*kg*ϵ > 1
+        return Nt
+    end
     Int(floor((r / sqrt(4α) / erfcinv(4*π*r*kg*ϵ))^2/Δt))
 end
 function compute_r(N, ϵ, params::Constants) 
@@ -15,13 +18,26 @@ function compute_r(N, ϵ, params::Constants)
     solve(problem, Roots.Brent(), xatol = 1e-2)
 end
 
+function get_representative_ptp(sources)
+    min_dist = Inf
+    setup = PointToPoint(r=0.)
+    for (i, s) in enumerate(sources)
+        for t in @views sources[1:i-1]
+            dist = compute_distance_3D(s, t)
+            if dist < min_dist
+                min_dist = dist
+                setup = PointToPoint(r=dist)
+            end
+        end
+    end
+    return min_dist
+end
 
 """
 Computes the blocks to be used
 """
 function choose_blocks(::PointToPoint, sources, Nt, ϵ, constants)
-    if isempty(Nr) return [Nt] end
-    Ncurrent = minimum(Nr)
+    Ncurrent = compute_N(get_representative_ptp(sources), ϵ, constants)
     N = Int[]
     while Ncurrent < Nt
         push!(N, Ncurrent)
@@ -42,7 +58,7 @@ function compute_ζ_points!(ζ, W, N, No, ϵ, Q, n, params::Constants)
     b = sqrt(-log(ϵ/Q) / (N*Δt̃))
     r̃ = r/rb
 
-    guide(ζ) = (exp(-ζ^2*N*Δt̃) + 100 * exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
+    guide(ζ) = (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
     sort!(segbuf, by=s->s.a)
     n_seg = length(segbuf)
@@ -68,7 +84,8 @@ end
 
 function compute_distance(::PointToPoint, source, target, params, ϵ, Nt)
     r = compute_distance_3D(source, target)
-    N_r = compute_N(r, ϵ, params)
+    N_r = compute_N(r, ϵ, params, Nt)
+    @show N_r, Nt
     r, N_r
 end
 
@@ -80,7 +97,7 @@ function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, 
     end
 end
 
-function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, N, ND, ranges)
+function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
     @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
 
