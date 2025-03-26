@@ -11,7 +11,7 @@ setup = SegmentToPoint(D=10., H=100., σ=0.0575, z=60.)
 #setup = MovingPointToPoint(x=100., σ=0.1, v=.01)
 #setup = MovingSegmentToPoint(x=0.01, y=0., z=10., v=0.0001, D=0., H=20.)
 
-params = Constants(Δt = 3600.)
+params = Constants(Δt = 3600., line_points = 20 .* [50, 50, 50], line_limits = [0., 0.3, 0.6, 1.])
 precomp = @time precompute_parameters(setup, params=params)
 @time compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=params)
 I
