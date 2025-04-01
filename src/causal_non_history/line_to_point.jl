@@ -51,11 +51,11 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::SegmentToP
     z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2))) 
     a = 0.
     f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
-        b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 + ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) ) - ϵ
+        b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4π^2*kg * ϵ
     end
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
 
-    b = solve(problem)
+    b = abs(solve(problem))
     if b == 0 || isnan(b) b = sqrt(-log(ϵ) / (N*Δt̃)) end
     params = LineKernelParams(presetup, 0., ϵ)
 
@@ -188,25 +188,6 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
     setup, min_dist = get_representative_ltp(sources)
     @unpack σ, D, H, z = setup
 
-
-    #=
-    ## This works, but needs to be debugged for allocations
-    dline = let setup=setup, constants=constants
-        (h, N) -> begin 
-            if N <= 0 return 0. end
-            @unpack α, kg, Δt = constants
-            @unpack D, H, z, σ = setup
-            integrand(s) = abs(exp(-σ^2 * s^2) / s * (
-                erf(s * min(z - D, h)) 
-                - erf(s * max(z - D - H, -h))
-                - erf(s * (z-D))
-                + erf(s * (z-D-H))
-            ))        
-            return 1 / (4π * kg) * quadgk(integrand, 1 / sqrt(4α*Δt*N), Inf)[1]
-        end
-    end
-    =#
-    
     dline = let σ=σ, D=D, H=H, z=z
         (h, N) -> begin
             if N <= 0 return 0. end
@@ -221,7 +202,7 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
     end
 
     Nmin = compute_N(min_dist, ϵ, constants)
-    N = [Int(floor(find_zero(N -> dline(0, N) - ϵ, Nmin == Inf ? Nt : Nmin)))]
+    N = [Int(floor(find_zero(N -> dline(0, N) - ϵ, isinf(Nmin) ? Nt : Nmin)))]
     ND = Float64[min_dist]
     i = 1
 
@@ -237,7 +218,7 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
         h = sqrt(d^2 - σ^2) - offset
         if (D <= z <= D+H && h < H/2) || h < H 
             Nd = compute_N(d, ϵ, constants)
-            Nr = Int(floor(find_zero(N -> dline(h, N) - ϵ, Nd == Inf ? Nt : Nd)))
+            Nr = Int(floor(find_zero(N -> dline(h, N) - ϵ, isinf(Nd) ? Nt : Nd)))
         else 
             Nr = compute_N(d, ϵ, constants)
         end
@@ -249,7 +230,9 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
     end
     if N[end] < Nt
         push!(N, Nt)
-        push!(ND, sqrt(σ^2 + max((z-D)^2, (z-D-H)^2)))
+        edge = max(abs(z-D), abs(z-D-H))
+        maxh = find_zero(h -> dline(h, Nt) - ϵ, ND[end])
+        push!(ND, sqrt(σ^2 + min(edge^2, maxh^2)))
     end
     return N, ND
 end 
@@ -263,8 +246,9 @@ end
 function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N, ND, n, ϵ, ϵ´, constants)
     K = length(N) - 1
     σ = ND[1]
+    maxH = maximum(map(e -> e.H, sources))
     for i in 1:K
-        H = min(2 * sqrt(ND[i+1]^2 - σ^2), maximum(map(e -> e.H, sources)))
+        H = min(2 * sqrt(ND[i+1]^2 - σ^2), maxH)
         setup = SegmentToPoint(D=0., H=H, z=H/2, σ=σ)
         N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, ϵ´, n, setup, constants)
         @views indices[i+1:end] .+= N_block

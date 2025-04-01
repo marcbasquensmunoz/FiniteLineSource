@@ -106,7 +106,8 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
     setup, min_dist = get_representative_ltl(sources)
     @unpack D1, H1, D2, H2, σ = setup
 
-    N = [Int(floor(find_zero(N -> I_L2L(0., N, setup, constants) - ϵ, compute_N(min_dist, ϵ, constants))))]
+    Nmin = compute_N(min_dist, ϵ, constants, Nt)
+    N = [Int(floor(find_zero(N -> I_L2L(0., N, setup, constants) - ϵ, Nmin)))]
     ND = Float64[min_dist]
     i = 1
 
@@ -121,7 +122,8 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
         if h < H2/2
-            Nr = Int(floor(find_zero(N -> I_L2L(h, N, setup, constants) - ϵ, compute_N(d, ϵ, constants), xatol=1.)))
+            Nd = compute_N(d, ϵ, constants, Nt)
+            Nr = Int(floor(find_zero(N -> I_L2L(h, N, setup, constants) - ϵ, Nd)))
         else 
             Nr = compute_N(d, ϵ, constants)
         end
@@ -133,7 +135,9 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
     end
     if N[end] < Nt
         push!(N, Nt)
-        push!(ND, sqrt(σ^2 + max((D1-D2-H2)^2, (D2-D1-H1)^2)))
+        edge = max(abs(D1+H1-D2), abs(D2+H2-D1))
+        maxh = find_zero(h -> I_L2L(h, Nt, setup, constants) - ϵ, ND[end])
+        push!(ND, sqrt(σ^2 + min(edge^2, maxh^2)))
     end
     return N, ND
 end 
@@ -209,10 +213,10 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
 
     a = 0.
     f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
-        b -> z_int * (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 + ϵ´ * sqrt(π)/2 * ( erf(b*sqrt((N-1)*Δt̃)) / sqrt((N-1)*Δt̃) - erf(b*sqrt((No-1)*Δt̃)) / sqrt((No-1)*Δt̃) ) - ϵ
+        b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4π*kg * ϵ
     end    
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
-    sol_b = solve(problem)
+    sol_b = abs(solve(problem))
     b = isnan(sol_b) || sol_b == 0 ? sqrt(-log(ϵ) / (N*Δt̃)) : sol_b
   
     params = LineToLineKernelParams(presetup, 0., ϵ)

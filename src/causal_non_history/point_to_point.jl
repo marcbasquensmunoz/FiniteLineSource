@@ -85,7 +85,6 @@ end
 function compute_distance(::PointToPoint, source, target, params, ϵ, Nt)
     r = compute_distance_3D(source, target)
     N_r = compute_N(r, ϵ, params, Nt)
-    @show N_r, Nt
     r, N_r
 end
 
