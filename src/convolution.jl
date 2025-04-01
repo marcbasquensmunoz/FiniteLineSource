@@ -33,8 +33,6 @@ function step_response(t, model::SegmentToPoint, params::Constants)
 
     I_stp(s) = erf(s * (z-D)) - erf(s * (z-D-H))
     1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * I_stp(s), 1/sqrt(4*α*t), Inf, atol = eps())[1]
-
-#    quadgk(ζ -> point_step_response(t, sqrt(σ^2 + (z-ζ)^2), α, kg), D, D+H, atol=eps())[1]
 end
 
 # Mean segment to segment
@@ -51,11 +49,7 @@ function step_response(t, model::SegmentToSegmentOld, params::Constants)
     @unpack α, kg = params
 
     I(s) = ierf((D2 - D1 + H2)*s) + ierf((D2 - D1 - H1)*s) - ierf((D2 - D1)*s) - ierf((D2 - D1 + H2 - H1)*s) 
-    return 1/(4π*kg*H2) * quadgk(s -> exp(-σ^2 * s^2) / s^2 * I(s), 1/sqrt(4α*t), Inf, atol=eps())[1]
-
-    #hcubature(z -> point_step_response(t, sqrt(σ^2 + (z[1]-z[2])^2), α, kg), [D1, D2], [D1+H1, D2+H2], abstol=1e-10)[1]
-    atol = eps()
-    quadgk(z1 -> quadgk(z2 -> point_step_response(t, sqrt(σ^2 + (z1-z2)^2), α, kg), D2, D2+H2, atol=atol)[1], D1, D1+H1, atol=atol)[1]
+    1/(4π*kg*H2) * quadgk(s -> exp(-σ^2 * s^2) / s^2 * I(s), 1/sqrt(4α*t), Inf, atol=eps())[1]
 end 
 
 # Moving point source

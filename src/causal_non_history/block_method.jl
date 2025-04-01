@@ -28,6 +28,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     n = 10
     expected_blocks = 5
     ϵ´ = 100ϵ
+    tol_adjust = ϵ <= 1e-12
     Ns = length(sources)
     # Evaluation points 
     # DO NOT USE FOR SELF-RESPONSE
@@ -46,10 +47,9 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         end
     end
 
-    N, ND = choose_blocks(setup, sources, Nt, ϵ/expected_blocks, constants)
+    N, ND = choose_blocks(setup, sources, Nt, ϵ/expected_blocks / (tol_adjust ? 10 : 1), constants)
     K = length(N) - 1
 
-    #@show N, ND
     for j in 1:Ns
         for i in 1:j-1
             last_block = findlast(x -> x <= NR[i, j], N)

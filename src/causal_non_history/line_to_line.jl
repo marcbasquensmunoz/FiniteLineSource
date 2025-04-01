@@ -63,8 +63,7 @@ end
 
 int_exp_ierf(x, L, σ) = x/2 * gamma(0, σ^2*L^2) - exp(-σ^2*L^2) / L / sqrt(π) + σ*erfc(σ*L) + exp(-(σ^2+x^2)*L^2) / L / sqrt(π) - sqrt(σ^2+x^2)*erfc(sqrt(σ^2+x^2)*L) 
 
-ierf(x) = x*erf(x) - 1/sqrt(π)*(1- exp(-x^2))
-function I_L2L(h, N, setup, constants)
+function I_L2L(h, N, setup, constants, ϵ)
     if N <= 0 return 0. end
     @unpack α, kg, Δt = constants
     @unpack D1, H1, D2, H2, σ = setup
@@ -96,7 +95,7 @@ function I_L2L(h, N, setup, constants)
     end    
 
     integrand(s) = exp(-σ^2 * s^2) / s * ((ierf(s * M1) + ierf(s * M2) - fA(s)) / s + erf(s * h) * P)      
-    return 1 / (4π*kg * H2) * abs(quadgk(integrand, 1/sqrt(4α*Δt*N), Inf)[1] - IA)
+    return 1 / (4π*kg * H2) * abs(quadgk(integrand, 1/sqrt(4α*Δt*N), Inf, atol=ϵ)[1] - IA)
 end
 
 function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
@@ -107,7 +106,11 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
     @unpack D1, H1, D2, H2, σ = setup
 
     Nmin = compute_N(min_dist, ϵ, constants, Nt)
-    N = [Int(floor(find_zero(N -> I_L2L(0., N, setup, constants) - ϵ, Nmin)))]
+    if I_L2L(0., Nt, setup, constants, ϵ) < ϵ
+        N = [Nt]
+    else 
+        N = [Int(floor(find_zero(N -> I_L2L(0., N, setup, constants, ϵ) - ϵ, Nmin)))]
+    end
     ND = Float64[min_dist]
     i = 1
 
@@ -123,7 +126,10 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
         h = sqrt(d^2 - σ^2) - offset
         if h < H2/2
             Nd = compute_N(d, ϵ, constants, Nt)
-            Nr = Int(floor(find_zero(N -> I_L2L(h, N, setup, constants) - ϵ, Nd)))
+            if I_L2L(h, Nt, setup, constants, ϵ) < ϵ
+                break
+            end
+            Nr = Int(floor(find_zero(N -> I_L2L(h, N, setup, constants, ϵ) - ϵ, Nd)))
         else 
             Nr = compute_N(d, ϵ, constants)
         end
@@ -136,7 +142,7 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
     if N[end] < Nt
         push!(N, Nt)
         edge = max(abs(D1+H1-D2), abs(D2+H2-D1))
-        maxh = find_zero(h -> I_L2L(h, Nt, setup, constants) - ϵ, ND[end])
+        maxh = find_zero(h -> I_L2L(h, Nt, setup, constants, ϵ) - ϵ, ND[end])
         push!(ND, sqrt(σ^2 + min(edge^2, maxh^2)))
     end
     return N, ND
@@ -213,7 +219,7 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
 
     a = 0.
     f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
-        b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃))/2 * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4π*kg * ϵ
+        b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4*π^2*kg * ϵ
     end    
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
     sol_b = abs(solve(problem))
@@ -224,10 +230,17 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     ω1 = min(params.r1, paramsT.r1)
     ω2 = max(params.r4, paramsT.r4)
 
-    guide = let N=N, No=No, Δt̃=Δt̃, rb=rb, ω1=ω1, ω2=ω2
+    #=guide = let N=N, No=No, Δt̃=Δt̃, rb=rb, ω1=ω1, ω2=ω2
         aa(ζ) = sin(ω1/rb * ζ) / ζ / ω1 
         bb(ζ) = sin(ω2/rb * ζ) / ζ / ω2
         ζ -> ζ == 0 ? 0. : (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (aa(ζ)-bb(ζ)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+    end=#
+    guide = let N=N, No=No, params=params, constants=constants
+        @unpack r1, r4 = params
+        @unpack Δt̃, rb = constants
+        ω1 = r1
+        ω2 = r4
+        ζ -> rb * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
     end
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
     

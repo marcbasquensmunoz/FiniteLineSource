@@ -50,12 +50,12 @@ end
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
-function compute_ζ_points!(ζ, W, N, No, ϵ, Q, n, params::Constants)
-    @unpack Δt, α, rb, Δt̃ = params
+function compute_ζ_points!(ζ, W, N, No, ϵ, n, params::Constants)
+    @unpack Δt, α, rb, Δt̃, kg = params
 
     r = compute_r(N, ϵ, params) 
     a = 0.
-    b = sqrt(-log(ϵ/Q) / (N*Δt̃))
+    b = sqrt(-log(ϵ) / (N*Δt̃))
     r̃ = r/rb
 
     guide(ζ) = (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
@@ -91,7 +91,7 @@ end
 function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, ND, n, ϵ, ϵ´, constants)
     K = length(N) - 1
     for i in 1:K
-        N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, 1., n, constants)
+        N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, n, constants)
         @views indices[i+1:end] .+= N_block
     end
 end
