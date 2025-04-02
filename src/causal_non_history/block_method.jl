@@ -22,7 +22,7 @@ end
     H
 end
 
-function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing)
+function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q=1.)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10

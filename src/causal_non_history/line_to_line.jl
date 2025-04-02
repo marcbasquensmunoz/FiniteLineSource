@@ -107,7 +107,7 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants)
 
     Nmin = compute_N(min_dist, ϵ, constants, Nt)
     if I_L2L(0., Nt, setup, constants, ϵ) < ϵ
-        N = [Nt]
+        N = Int[Nt]
     else 
         N = [Int(floor(find_zero(N -> I_L2L(0., N, setup, constants, ϵ) - ϵ, Nmin)))]
     end
@@ -218,7 +218,7 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     z_int = 1/(4π*kg*H2) * (β(D1+H1-D2-H2) + β(D1-D2) - β(D1-H2-D2) - β(D1+H1-D2))
 
     a = 0.
-    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃
+    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃, kg=kg
         b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4*π^2*kg * ϵ
     end    
     problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
@@ -237,10 +237,10 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     end=#
     guide = let N=N, No=No, params=params, constants=constants
         @unpack r1, r4 = params
-        @unpack Δt̃, rb = constants
+        @unpack Δt̃, rb, kg = constants
         ω1 = r1
         ω2 = r4
-        ζ -> rb * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+        ζ -> 1/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
     end
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
     

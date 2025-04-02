@@ -44,27 +44,28 @@ end
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
-function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::SegmentToPoint, constants::Constants)
+function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, Q, presetup::SegmentToPoint, constants::Constants)
     @unpack Δt, α, rb, kg, Δt̃ = constants
     @unpack D, H, z, σ = presetup
 
     z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2))) 
     a = 0.
     f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃, kg=kg
-        b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4π^2*kg * ϵ
+        b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4π^2*kg * ϵ / Q
     end
-    problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
+    b0 = sqrt(-log(ϵ/Q) / (N*Δt̃))
+    problem = ZeroProblem(f, b0)
 
     sol_b = abs(solve(problem))
-    b = isnan(sol_b) || sol_b == 0 ? sqrt(-log(ϵ) / (N*Δt̃)) : sol_b   
+    b = isnan(sol_b) || sol_b == 0 ? b0 : sol_b   
     params = LineKernelParams(presetup, 0., ϵ)
 
     guide = let N=N, No=No, params=params, constants=constants
-        @unpack r1, r3 = params
-        @unpack Δt̃, rb = constants
+        @unpack r1, r3, σ = params
+        @unpack Δt̃, rb, kg = constants
         ω1 = r1
         ω2 = r3
-        ζ -> rb * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+        ζ -> 1/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
     end
 
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
@@ -246,14 +247,14 @@ function compute_distance(::SegmentToPoint, source, target, params, ϵ, Nt)
     dist, N_r
 end
 
-function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N, ND, n, ϵ, ϵ´, constants)
+function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N, ND, n, Q=1., ϵ, ϵ´, constants)
     K = length(N) - 1
     σ = ND[1]
     maxH = maximum(map(e -> e.H, sources))
     for i in 1:K
         H = min(2 * sqrt(ND[i+1]^2 - σ^2), maxH)
         setup = SegmentToPoint(D=0., H=H, z=H/2, σ=σ)
-        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, ϵ´, n, setup, constants)
+        N_block = compute_ζ_points_line!(ζ, W, N[i], N[i+1], ϵ, ϵ´, n, Q, setup, constants)
         @views indices[i+1:end] .+= N_block
     end
 end
