@@ -230,16 +230,7 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     ω1 = min(params.r1, paramsT.r1)
     ω2 = max(params.r4, paramsT.r4)
 
-    #=guide = let N=N, No=No, Δt̃=Δt̃, rb=rb, ω1=ω1, ω2=ω2
-        aa(ζ) = sin(ω1/rb * ζ) / ζ / ω1 
-        bb(ζ) = sin(ω2/rb * ζ) / ζ / ω2
-        ζ -> ζ == 0 ? 0. : (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (aa(ζ)-bb(ζ)) * (1 - exp(-ζ^2*Δt̃)) / ζ
-    end=#
-    guide = let N=N, No=No, params=params, constants=constants
-        @unpack r1, r4 = params
-        @unpack Δt̃, rb, kg = constants
-        ω1 = r1
-        ω2 = r4
+    guide = let N=N, No=No, ω1=ω1, ω2=ω2, Δt̃=Δt̃, kg=kg, rb=rb
         ζ -> 1/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
     end
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
