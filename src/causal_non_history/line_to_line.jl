@@ -221,9 +221,10 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃, kg=kg
         b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4*π^2*kg * ϵ
     end    
-    problem = ZeroProblem(f, sqrt(-log(ϵ) / (N*Δt̃)))
+    b0 = sqrt(-log(ϵ) / (N*Δt̃))
+    problem = ZeroProblem(f, b0)
     sol_b = abs(solve(problem))
-    b = isnan(sol_b) || sol_b == 0 ? sqrt(-log(ϵ) / (N*Δt̃)) : sol_b
+    b = isnan(sol_b) || sol_b == 0 ? b0 : sol_b
   
     params = LineToLineKernelParams(presetup, 0., ϵ)
     paramsT = LineToLineKernelParams(transpose(presetup), 0., ϵ)

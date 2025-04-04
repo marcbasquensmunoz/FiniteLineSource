@@ -10,7 +10,7 @@ kg = 3.
 rb = 0.1
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 
-B = 5.3
+B = 1.
 
 q = [1. for t in 1:Nt]
 
@@ -23,7 +23,7 @@ positions = [(0., 0., 0.), (B, 0., 0.)]
 setup = PointToPoint(r = B)
 
 # Block method
-block = prepare_containers(setup, positions, ϵ, Nt, constants, nothing);
+block = prepare_containers(setup, positions, ϵ, Nt, constants);
 Ib = zeros(length(positions), Nt)
 evolve!(Ib, q, block)
 
@@ -41,8 +41,8 @@ Inh = zeros(Nt)
 
 # Precomputation
 block = @btime prepare_containers(setup, positions, ϵ, Nt, constants, nothing);
-precomp = @btime precompute_parameters(setup, params=params);
+precomp = @btime precompute_parameters(setup, params=constants, ϵ=ϵ);
 
 # Simulation 
 @btime evolve!(Ib, q, block)
-@btime compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=params)
+@btime compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=constants)
