@@ -1,6 +1,4 @@
 
-compute_distance_3D(x, y) = sqrt((x[1] - y[1])^2 + (x[2] - y[2])^2 + (x[3] - y[3])^2)
-
 """
 Compute the number of steps N that can be skipped for a given distance r
 """
@@ -82,11 +80,6 @@ function compute_ζ_points!(ζ, W, N, No, ϵ, n, params::Constants)
     return Nζ
 end
 
-function compute_distance(::PointToPoint, source, target, params, ϵ, Nt)
-    r = compute_distance_3D(source, target)
-    N_r = compute_N(r, ϵ, params, Nt)
-    r, N_r
-end
 
 function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, ND, n, ϵ, ϵ´, constants)
     K = length(N) - 1

@@ -1,5 +1,4 @@
-
-@with_kw struct LineToLineKernelParams{T <: Number} @deftype T
+@with_kw struct LineToLineIntegralParams{T <: Number} @deftype T
     r1
     r2
     r3
@@ -12,7 +11,7 @@
     ϵ
 end
 
-function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ, h=nothing)
+function LineToLineIntegralParams(setup::SegmentToSegment, ω, ϵ, h=nothing)
     @unpack D1, H1, D2, H2, σ = setup
 
     rLR = sqrt(σ^2 + (D2 - D1 - H1)^2     ) 
@@ -30,19 +29,7 @@ function LineToLineKernelParams(setup::SegmentToSegment, ω, ϵ, h=nothing)
     α3 = D2 - D1 + H2
 
     d = isnothing(h) ? Inf : sqrt(σ^2 + h^2)
-    LineToLineKernelParams(r1=min(r1, d), r2=min(r2, d), r3=min(r3, d), r4=min(r4, d), α1=α1, α2=α2, α3=α3, ω=ω, σ=σ, ϵ=ϵ)
-end
-
-function minimum_distance_line_to_line(source, target)
-    σ = compute_distance_2D(source, target)
-    if target.D > source.D + source.H
-        dist = sqrt(σ^2 + (target.D - source.D - source.H)^2)
-    elseif source.D > target.D + target.H
-        dist = sqrt(σ^2 + (source.D - target.D - target.H)^2)
-    else 
-        dist = σ
-    end
-    return dist
+    LineToLineIntegralParams(r1=min(r1, d), r2=min(r2, d), r3=min(r3, d), r4=min(r4, d), α1=α1, α2=α2, α3=α3, ω=ω, σ=σ, ϵ=ϵ)
 end
 
 function get_representative_ltl(sources)
@@ -150,7 +137,7 @@ end
 
 zero_freq(a, b, σ) = log( ( (b+sqrt(b^2-σ^2)) * (-a+sqrt(a^2-σ^2)) ) / ( (a+sqrt(a^2-σ^2)) * (-b+sqrt(b^2-σ^2)) ) ) / 2
 
-function compute_kernel_double_line_part(params::LineToLineKernelParams; containers)
+function compute_double_line_integral_part(params::LineToLineIntegralParams; containers)
     @unpack r1, r2, r3, r4, ω, ϵ, α1, α2, α3, σ = params
 
     if ω == 0.
@@ -194,16 +181,10 @@ function compute_kernel_double_line_part(params::LineToLineKernelParams; contain
     return I
 end
 
-function compute_kernel_double_line(params::LineToLineKernelParams, paramsT::LineToLineKernelParams; containers)
-    I1 = compute_kernel_double_line_part(params, containers=containers)
-    I2 = compute_kernel_double_line_part(paramsT, containers=containers)
+function compute_double_line_integral(params::LineToLineIntegralParams, paramsT::LineToLineIntegralParams; containers)
+    I1 = compute_double_line_integral_part(params, containers=containers)
+    I2 = compute_double_line_integral_part(paramsT, containers=containers)
     (I1+I2)
-end
-
-function compute_distance(::SegmentToSegment, source, target, params, ϵ, Nt)
-    dist = minimum_distance(source, target)
-    N_r = compute_N(dist, ϵ, params) 
-    dist, N_r
 end
 
 """
@@ -226,8 +207,8 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     sol_b = abs(solve(problem))
     b = isnan(sol_b) || sol_b == 0 ? b0 : sol_b
   
-    params = LineToLineKernelParams(presetup, 0., ϵ)
-    paramsT = LineToLineKernelParams(transpose(presetup), 0., ϵ)
+    params = LineToLineIntegralParams(presetup, 0., ϵ)
+    paramsT = LineToLineIntegralParams(transpose(presetup), 0., ϵ)
     ω1 = min(params.r1, paramsT.r1)
     ω2 = max(params.r4, paramsT.r4)
 
@@ -279,10 +260,10 @@ function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, con
         block = findfirst(range -> k in range, ranges)
         h = sqrt(ND[block+1]^2 - σ^2)
         setup = SegmentToSegment(D1=source.D, H1=source.H, D2=target.D, H2=target.H, σ=σ)
-        lineparams = FiniteLineSource.LineToLineKernelParams(setup, ζζ/rb, ϵ, h)
-        lineparamsT = FiniteLineSource.LineToLineKernelParams(transpose(setup), ζζ/rb, ϵ, h)
+        lineparams = FiniteLineSource.LineToLineIntegralParams(setup, ζζ/rb, ϵ, h)
+        lineparamsT = FiniteLineSource.LineToLineIntegralParams(transpose(setup), ζζ/rb, ϵ, h)
 
-        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_double_line(lineparams, lineparamsT; containers=containers)
+        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_double_line_integral(lineparams, lineparamsT; containers=containers)
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end

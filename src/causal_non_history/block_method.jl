@@ -15,6 +15,12 @@ struct BlockMethod{T <: Number}
     qoutaux::Vector{T}
     N::Vector{Int}
 end
+
+@with_kw struct PointSource{T <: Number} @deftype T
+    x
+    y
+    z
+end
 @with_kw struct LineSource{T <: Number} @deftype T
     x
     y
@@ -22,12 +28,18 @@ end
     H
 end
 
-function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing)
+function compute_distance(source, target, params, ϵ, Nt)
+    dist = minimum_distance(source, target)
+    N_r = compute_N(dist, ϵ, params) 
+    dist, N_r
+end
+
+function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q = 1.)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10
     expected_blocks = 5
-    ϵ´ = 100ϵ
+    ϵ´ = 100ϵ/Q
     tol_adjust = ϵ <= 1e-12
     Ns = length(sources)
     # Evaluation points 
@@ -38,7 +50,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     for j in 1:Ns
         for i in 1:j-1
-            distance, N_r = compute_distance(setup, sources[i], sources[j], constants, ϵ, Nt)
+            distance, N_r = compute_distance(sources[i], sources[j], constants, ϵ/Q, Nt)
             distances[i, j] = distance
             distances[j, i] = distance
             if N_r > Nt N_r = Nt end
@@ -47,7 +59,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         end
     end
 
-    N, ND = choose_blocks(setup, sources, Nt, ϵ/expected_blocks / (tol_adjust ? 10 : 1), constants)
+    N, ND = choose_blocks(setup, sources, Nt, ϵ/Q/expected_blocks / (tol_adjust ? 10 : 1), constants)
     K = length(N) - 1
 
     for j in 1:Ns
@@ -63,7 +75,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     W = zeros(0)
     indices = zeros(Int64, K+1)
 
-    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ/K, ϵ´=ϵ´, constants=constants)
+    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ/K/Q, ϵ´=ϵ´, constants=constants)
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 

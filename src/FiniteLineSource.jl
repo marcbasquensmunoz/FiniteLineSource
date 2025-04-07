@@ -49,6 +49,7 @@ export compute_coefficients_through_history, precompute_matrices, legendre_coeff
 
 include("causal_non_history/asymptotic_integration.jl")
 include("causal_non_history/block_method.jl")
+include("causal_non_history/distance.jl")
 include("causal_non_history/point_to_point.jl")
 include("causal_non_history/line_to_point.jl")
 include("causal_non_history/line_to_line.jl")

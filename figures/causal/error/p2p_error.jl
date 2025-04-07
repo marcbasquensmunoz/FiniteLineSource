@@ -1,14 +1,16 @@
 using FiniteLineSource
+using FiniteLineSource: PointSource
 using Makie
 using CairoMakie
 
 include("error_utils.jl")
 
-function compute_error_Linf(;r, ϵ, q, constants)
-    Nt = length(q)
-    sources = [(0., 0., 0.), (r, 0., 0.)]
+function compute_error_Linf(;r, ϵ, q_gen, constants)
+    sources = [PointSource(0., 0., 0.), PointSource(r, 0., 0.)]
 
-    block = prepare_containers(PointToPoint(r=r), sources, ϵ, Nt, constants);
+    Nt = compute_N(r, ϵ, constants, 40*8760) 
+    q = q_gen.(1:Nt)
+    block = prepare_containers(PointToPoint(r=r), sources, ϵ, Nt, constants, Q=maximum(q));
     Ib = zeros(length(sources), Nt)
     evolve!(Ib, q, block)
 
@@ -19,15 +21,15 @@ function compute_error_Linf(;r, ϵ, q, constants)
     maximum(err)
 end
 
-res_step = zeros(length(r_range), length(ϵ_range))
-res_synth = zeros(length(r_range), length(ϵ_range))
+res_step = zeros(length(r̃_range), length(ϵ_range))
+res_synth = zeros(length(r̃_range), length(ϵ_range))
 
 for (i, ϵ) in enumerate(ϵ_range)
     @info "Computing errors for ϵ=$ϵ"
-    @. res_step[:, i] = [compute_error_Linf(r=rr, ϵ=ϵ, q=q_step, constants=constants) for rr in r_range]
-    #@. res_synth[:, i] = [compute_error_Linf(r=rr, ϵ=ϵ, q=q_synth, constants=constants) for rr in r_range]
+    @. res_step[:, i] = [compute_error_Linf(r=rr*rb, ϵ=ϵ, q_gen=q_step, constants=constants) for rr in r̃_range]
+    @. res_synth[:, i] = [compute_error_Linf(r=rr*rb, ϵ=ϵ, q_gen=q_synth, constants=constants) for rr in r̃_range]
 end
 
-fig = create_error_plot(ϵ_range, r_range, res_step, res_synth; xlabel=:r, rb=rb, title= L"\text{Error in the point to point case}")
+fig = create_error_plot(ϵ_range, r̃_range, res_step, res_synth; xlabel=:r, rb=rb, title= L"\text{Error in the point to point case}")
 
 save("figures/causal/error/p2p_error.pdf", fig)

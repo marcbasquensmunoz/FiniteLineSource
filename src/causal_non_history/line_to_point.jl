@@ -1,7 +1,4 @@
-using Plots 
-compute_distance_2D(s, t) = sqrt((s.x - t.x)^2 + (s.y - t.y)^2)
-
-@with_kw struct LineKernelParams{T <: Number} @deftype T
+@with_kw struct LineIntegralParams{T <: Number} @deftype T
     r1
     r2
     r3
@@ -10,7 +7,7 @@ compute_distance_2D(s, t) = sqrt((s.x - t.x)^2 + (s.y - t.y)^2)
     ϵ
 end
 
-function LineKernelParams(setup::SegmentToPoint, ω, ϵ)
+function LineIntegralParams(setup::SegmentToPoint, ω, ϵ)
     @unpack D, H, z, σ = setup
 
     rB = sqrt(σ^2 + (z - D - H)^2 )
@@ -20,7 +17,7 @@ function LineKernelParams(setup::SegmentToPoint, ω, ϵ)
     r2 = min(rB, rT)
     r3 = max(rB, rT)
     
-    LineKernelParams(r1=r1, r2=r2, r3=r3, ω=ω, σ=σ, ϵ=ϵ)
+    LineIntegralParams(r1=r1, r2=r2, r3=r3, ω=ω, σ=σ, ϵ=ϵ)
 end
 
 I_stp(s, D, H, z) = erf(s * (z-D)) - erf(s * (z-D-H))
@@ -58,7 +55,7 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, Q, presetup::Segment
 
     sol_b = abs(solve(problem))
     b = isnan(sol_b) || sol_b == 0 ? b0 : sol_b   
-    params = LineKernelParams(presetup, 0., ϵ)
+    params = LineIntegralParams(presetup, 0., ϵ)
 
     guide = let N=N, No=No, params=params, constants=constants
         @unpack r1, r3, σ = params
@@ -91,7 +88,7 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, Q, presetup::Segment
     return Nζ
 end
 
-function compute_kernel_line(params::LineKernelParams; containers)
+function compute_line_integral(params::LineIntegralParams; containers)
     @unpack r1, r2, r3, σ, ω, ϵ = params
 
     I = 0.
@@ -142,18 +139,6 @@ function bakhalov_discretization(N, setup, params::Constants)
     x[perm], w[perm], fx, expt, exptout, Ic, Icout
 end
 =#
-
-function minimum_distance(source, target)
-    σ = compute_distance_2D(source, target)
-    if target.D > source.D + source.H 
-        dist = sqrt(σ^2 + (target.D - source.D - source.H)^2)
-    elseif target.D + target.H < source.D 
-        dist = sqrt(σ^2 + (target.D + target.H - source.D )^2)
-    else 
-        dist = σ
-    end
-    return dist
-end
 
 function minimum_distance_line_to_point(source, target)
     σ = compute_distance_2D(source, target)
@@ -283,8 +268,8 @@ function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, const
             H_eval = min(source.D + source.H, z_eval + h) - D_eval
         end
         setup = SegmentToPoint(D=D_eval, H=H_eval, z=z_eval, σ=σ)
-        lineparams = LineKernelParams(setup, ζζ/rb, ϵ)
-        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * compute_kernel_line(lineparams; containers=containers)
+        lineparams = LineIntegralParams(setup, ζζ/rb, ϵ)
+        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * compute_line_integral(lineparams; containers=containers)
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end
