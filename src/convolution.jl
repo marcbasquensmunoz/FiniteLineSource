@@ -11,45 +11,45 @@ end
 point_step_response(t, r, α, kg) = erfc(r/(2*sqrt(t*α))) / (4*π*r*kg)
 
 
-function convolve_step(q, model::Setup; params::Constants)
+function convolve_step(q, model::Setup; params::Constants, ϵ=eps())
     @unpack Δt = params
     q = diff([0; q])
     t = Δt:Δt:Δt*length(q)
-    response = step_response.(t, Ref(model), Ref(params))
+    response = step_response.(t, Ref(model), Ref(params), ϵ=ϵ)
     return DSP.conv(q, response)[1:length(q)]
 end
 
 # Point to point
-function step_response(t, model::PointToPoint, params::Constants)
+function step_response(t, model::PointToPoint, params::Constants; ϵ=eps())
     @unpack r = model
     @unpack α, kg = params
     point_step_response(t, r, α, kg)
 end
 
 # Segment to point
-function step_response(t, model::SegmentToPoint, params::Constants)
+function step_response(t, model::SegmentToPoint, params::Constants; ϵ=eps())
     @unpack σ, D, H, z = model
     @unpack α, kg = params
 
     I_stp(s) = erf(s * (z-D)) - erf(s * (z-D-H))
-    1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * I_stp(s), 1/sqrt(4*α*t), Inf, atol = eps())[1]
+    1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * I_stp(s), 1/sqrt(4*α*t), Inf, atol=ϵ)[1]
 end
 
 # Mean segment to segment
-function step_response(t, model::SegmentToSegment, params::Constants)
+function step_response(t, model::SegmentToSegment, params::Constants; ϵ=eps())
     @unpack σ, D1, H1, D2, H2 = model
     @unpack α, kg, rb = params
     params = MeanSegToSegEvParams(model)
     r_min, r_max = h_mean_lims(params)
-    quadgk(r -> h_mean_sts(r, params) * point_step_response(t, r, α, kg), r_min, r_max, atol=eps())[1]
+    quadgk(r -> h_mean_sts(r, params) * point_step_response(t, r, α, kg), r_min, r_max, atol=ϵ)[1]
 end
 
-function step_response(t, model::SegmentToSegmentOld, params::Constants)
+function step_response(t, model::SegmentToSegmentOld, params::Constants; ϵ=eps())
     @unpack σ, D1, H1, D2, H2 = model
     @unpack α, kg = params
 
     I(s) = ierf((D2 - D1 + H2)*s) + ierf((D2 - D1 - H1)*s) - ierf((D2 - D1)*s) - ierf((D2 - D1 + H2 - H1)*s) 
-    1/(4π*kg*H2) * quadgk(s -> exp(-σ^2 * s^2) / s^2 * I(s), 1/sqrt(4α*t), Inf, atol=eps())[1]
+    1/(4π*kg*H2) * quadgk(s -> exp(-σ^2 * s^2) / s^2 * I(s), 1/sqrt(4α*t), Inf, atol=ϵ)[1]
 end 
 
 # Moving point source

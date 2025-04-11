@@ -20,23 +20,14 @@ function LineIntegralParams(setup::SegmentToPoint, ω, ϵ)
     LineIntegralParams(r1=r1, r2=r2, r3=r3, ω=ω, σ=σ, ϵ=ϵ)
 end
 
-I_stp(s, D, H, z) = erf(s * (z-D)) - erf(s * (z-D-H))
-"""
-Compute the number of steps N that can be skipped for a line to point
-"""
-function compute_N_line(ϵ, Nt, setup::SegmentToPoint, params::Constants) 
-    @unpack σ, D, H, z = setup
-    @unpack α, kg, Δt = params
-    
-    f = let kg=kg, σ=σ, α=α, Δt=Δt, D=D, H=H, z=z, ϵ=ϵ
-        N -> 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * I_stp(s, D, H, z), 1/sqrt(4*α*Δt*N), Inf)[1] - ϵ
-    end
-
-    if f(1)*f(Nt) > 0 return Nt end
-    problem = ZeroProblem(f, 10σ^2)
-    sol = solve(problem, xtol=1.)
-    Int(floor(sol))
+function compute_distance(::SegmentToPoint, source, target, constants::Constants, ϵ, Nt, Q)
+    dist = minimum_distance(source, target)
+    new_setup = SegmentToPoint(D=source.D, H=source.H, z=target.D+target.H/2, σ=dist)
+    N_r = compute_N_for_line_range(0., new_setup, constants, ϵ, Nt, Nt, Q)
+    dist, N_r
 end
+
+I_stp(s, D, H, z) = erf(s * (z-D)) - erf(s * (z-D-H))
 
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
@@ -47,25 +38,25 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, Q, presetup::Segment
 
     z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2))) 
     a = 0.
-    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃, kg=kg
+    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃, kg=kg, Q=Q
         b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4π^2*kg * ϵ / Q
     end
     b0 = sqrt(-log(ϵ/Q) / (N*Δt̃))
     problem = ZeroProblem(f, b0)
 
     sol_b = abs(solve(problem))
-    b = isnan(sol_b) || sol_b == 0 ? b0 : sol_b   
-    params = LineIntegralParams(presetup, 0., ϵ)
+    b = isnan(sol_b) || sol_b == 0 || sol_b > 10 ? b0 : sol_b   
+    params = LineIntegralParams(presetup, 0., ϵ/Q)
 
-    guide = let N=N, No=No, params=params, constants=constants
+    guide = let N=N, No=No, params=params, constants=constants, Q=Q
         @unpack r1, r3, σ = params
         @unpack Δt̃, rb, kg = constants
         ω1 = r1
         ω2 = r3
-        ζ -> 1/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+        ζ -> Q/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
     end
 
-    _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
+    _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=Q*ϵ)
     sort!(segbuf, by=x->x.a)
     n_seg = length(segbuf)
 
@@ -181,14 +172,22 @@ function I_L2P(h, N, setup, constants, ϵ)
     end
 end
 
-function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
+function compute_N_for_line_range(h, setup, constants, ϵ, Nt, Ndef, Q)
+    try 
+        return Int(floor(find_zero(N -> I_L2P(h, N, setup, constants, ϵ) - ϵ/Q, isinf(Ndef) ? Nt : Ndef)))
+    catch 
+        return Ndef
+    end
+end
+
+function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants, Q)
     @unpack kg, α, Δt, Δt̃, rb = constants
     ratio = 3.
     setup, min_dist = get_representative_ltp(sources)
     @unpack σ, D, H, z = setup
 
-    Nmin = compute_N(min_dist, ϵ, constants)
-    N = [Int(floor(find_zero(N -> I_L2P(0, N, setup, constants, ϵ) - ϵ, isinf(Nmin) ? Nt : Nmin)))]
+    Nmin = compute_N(min_dist, ϵ, constants, Nt, Q)
+    N = [compute_N_for_line_range(0., setup, constants, ϵ, Nt, Nmin, Q)]
     ND = Float64[min_dist]
     i = 1
 
@@ -203,13 +202,13 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
         if (D <= z <= D+H && h < H/2) || h < H 
-            Nd = compute_N(d, ϵ, constants)
-            if I_L2P(h, Nt, setup, constants, ϵ) < ϵ
+            Nd = compute_N(d, ϵ, constants, Q)
+            if I_L2P(h, Nt, setup, constants, ϵ) < ϵ/Q
                 break
             end
-            Nr = Int(floor(find_zero(N -> I_L2P(h, N, setup, constants, ϵ) - ϵ, isinf(Nd) ? Nt : Nd)))
+            Nr = compute_N_for_line_range(h, setup, constants, ϵ, Nt, Nd, Q)
         else 
-            Nr = compute_N(d, ϵ, constants)
+            Nr = compute_N(d, ϵ, constants, Q)
         end
         i += 1
         if Nr < N[end] continue end
@@ -220,17 +219,16 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants)
     if N[end] < Nt
         push!(N, Nt)
         edge = max(abs(z-D), abs(z-D-H))
-        maxh = find_zero(h -> I_L2P(h, Nt, setup, constants, ϵ) - ϵ, min(ND[end], edge))
+        local maxh
+        try
+            maxh = find_zero(h -> I_L2P(h, Nt, setup, constants, ϵ) - ϵ/Q, min(ND[end], edge))
+        catch
+            maxh = edge
+        end
         push!(ND, sqrt(σ^2 + min(edge^2, maxh^2)))
     end
     return N, ND
 end 
-
-function compute_distance(::SegmentToPoint, source, target, params, ϵ, Nt)
-    dist = minimum_distance(source, target)
-    N_r = compute_N(dist, ϵ, params) 
-    dist, N_r
-end
 
 function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N, ND, n, Q=1., ϵ, ϵ´, constants)
     K = length(N) - 1

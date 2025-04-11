@@ -11,8 +11,7 @@ struct BlockMethod{T <: Number}
     ranges::Vector{UnitRange{Int}}
     Kranges::Vector{UnitRange{Int}}
     K_min::Matrix{Int}
-    qinaux::Vector{T}
-    qoutaux::Vector{T}
+    qaux::Vector{T}
     N::Vector{Int}
 end
 
@@ -28,19 +27,12 @@ end
     H
 end
 
-function compute_distance(source, target, params, ϵ, Nt)
-    dist = minimum_distance(source, target)
-    N_r = compute_N(dist, ϵ, params) 
-    dist, N_r
-end
-
-function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q = 1.)
+function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q=1.)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10
     expected_blocks = 5
     ϵ´ = 100ϵ/Q
-    tol_adjust = ϵ <= 1e-12
     Ns = length(sources)
     # Evaluation points 
     # DO NOT USE FOR SELF-RESPONSE
@@ -50,7 +42,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     for j in 1:Ns
         for i in 1:j-1
-            distance, N_r = compute_distance(sources[i], sources[j], constants, ϵ/Q, Nt)
+            distance, N_r = compute_distance(setup, sources[i], sources[j], constants, ϵ, Nt, Q)
             distances[i, j] = distance
             distances[j, i] = distance
             if N_r > Nt N_r = Nt end
@@ -59,7 +51,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         end
     end
 
-    N, ND = choose_blocks(setup, sources, Nt, ϵ/Q/expected_blocks / (tol_adjust ? 10 : 1), constants)
+    N, ND = choose_blocks(setup, sources, Nt, ϵ/expected_blocks, constants, Q)
     K = length(N) - 1
 
     for j in 1:Ns
@@ -75,7 +67,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     W = zeros(0)
     indices = zeros(Int64, K+1)
 
-    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ/K/Q, ϵ´=ϵ´, constants=constants)
+    compute_ζ_discretization!(ζ, W, indices, setup; sources=sources, N=N, ND=ND, n=n, ϵ=ϵ/K, ϵ´=ϵ´, constants=constants, Q=Q)
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 
@@ -104,8 +96,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     compute_H!(HM, setup; ζ=ζ, W=W, expt=expt, sources=sources, distances=distances, constants=constants, ϵ=ϵ´, containers=containers, ND=ND, ranges=ranges)
 
-    qin = zeros(length(ζ))
-    qout = zeros(length(ζ))
+    qaux = zeros(length(ζ))
 
     BlockMethod(
         ζ, 
@@ -119,8 +110,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         ranges, 
         Kranges, 
         K_min, 
-        qin, 
-        qout,
+        qaux, 
         N
         #=sr_ζ,
         sr_w,
@@ -134,7 +124,7 @@ end
 
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
-        ranges, Kranges, K_min, qinaux, qoutaux#=, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout =#= block
+        ranges, Kranges, K_min, qaux#=, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout =#= block
 
     if isempty(Kranges) return end
 
@@ -154,18 +144,17 @@ function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
             qout = i == length(load_delays) ? 0. : load_delays[i][1]
             push!(load_delays[i], qin)
             current_q = qout
-            @. qinaux[ranges[i]] = qin
-            @. qoutaux[ranges[i]] = qout
+            @inbounds @views @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
         end
 
-        @. F = expt * F + (qinaux * expNin - qoutaux * expNout)
+        @. F = expt * F + qaux
 
         bh_indices = 1:size(block.K_min)[1]
         for target in bh_indices
             for source in bh_indices
                 if source == target continue end
-                range = Kranges[K_min[source, target]]
-                @views I[target, nt] += dot(F[range], HM[range, target, source])
+                @inbounds range = Kranges[K_min[source, target]]
+                @inbounds @views I[target, nt] += dot(F[range], HM[range, target, source])
             end
         end
     end

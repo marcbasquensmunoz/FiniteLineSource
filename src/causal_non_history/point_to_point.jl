@@ -1,17 +1,21 @@
+function compute_distance(::PointToPoint, source, target, constants::Constants, ϵ, Nt, Q)
+    dist = minimum_distance(source, target)
+    N_r = compute_N(dist, ϵ, constants, Q, Nt) 
+    dist, N_r
+end
 
 """
 Compute the number of steps N that can be skipped for a given distance r
 """
-function compute_N(r, ϵ, params::Constants, Nt=Inf) 
-    @unpack Δt, α, kg = params
-    if 4*π*r*kg*ϵ > 1
-        return Nt
-    end
-    Int(floor((r / sqrt(4α) / erfcinv(4*π*r*kg*ϵ))^2/Δt))
+function compute_N(r, ϵ, constants::Constants, Q, Nt=Inf) 
+    @unpack Δt, α, kg = constants
+    if 4*π*r*kg*ϵ/Q > 1 return Nt end
+    Int(floor((r / sqrt(4α) / erfcinv(4*π*r*kg*ϵ/Q))^2/Δt))
 end
-function compute_r(N, ϵ, params::Constants) 
-    @unpack Δt, α, kg = params
-    f(r) = erfc(r / sqrt(4α*Δt*N)) / (4*π*r*kg) - ϵ
+
+function compute_r(N, ϵ, constants::Constants, Q) 
+    @unpack Δt, α, kg = constants
+    f(r) = erfc(r / sqrt(4α*Δt*N)) / (4*π*r*kg) - ϵ/Q
     problem = ZeroProblem(f, (0, N))
     solve(problem, Roots.Brent(), xatol = 1e-2)
 end
@@ -34,30 +38,30 @@ end
 """
 Computes the blocks to be used
 """
-function choose_blocks(::PointToPoint, sources, Nt, ϵ, constants)
-    Ncurrent = compute_N(get_representative_ptp(sources), ϵ, constants)
+function choose_blocks(::PointToPoint, sources, Nt, ϵ, constants, Q)
+    Ncurrent = compute_N(get_representative_ptp(sources), ϵ, constants, Q)
     N = Int[]
     while Ncurrent < Nt
         push!(N, Ncurrent)
         Ncurrent *= 10
     end
     push!(N, Nt)
-    return N, map(n -> compute_r(n, ϵ, constants), N)
+    return N, map(n -> compute_r(n, ϵ, constants, Q), N)
 end
 
 """
 Compute the nodes ζ and weights W suitable to integrate the function F after skipping N steps
 """
-function compute_ζ_points!(ζ, W, N, No, ϵ, n, params::Constants)
+function compute_ζ_points!(ζ, W, N, No, ϵ, n, params::Constants, Q)
     @unpack Δt, α, rb, Δt̃, kg = params
 
-    r = compute_r(N, ϵ, params) 
+    r = compute_r(N, ϵ, params, Q) 
     a = 0.
-    b = sqrt(-log(ϵ) / (N*Δt̃))
+    b = sqrt(-log(ϵ/Q) / (N*Δt̃))
     r̃ = r/rb
 
-    guide(ζ) = (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
-    _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=ϵ)
+    guide(ζ) = Q * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * sin(r̃*ζ) / (r*ζ) * (1 - exp(-ζ^2*Δt̃))
+    _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=Q*ϵ)
     sort!(segbuf, by=s->s.a)
     n_seg = length(segbuf)
 
@@ -81,10 +85,10 @@ function compute_ζ_points!(ζ, W, N, No, ϵ, n, params::Constants)
 end
 
 
-function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, ND, n, ϵ, ϵ´, constants)
+function compute_ζ_discretization!(ζ, W, indices, ::PointToPoint; sources, N, ND, n, ϵ, ϵ´, constants, Q=1.)
     K = length(N) - 1
     for i in 1:K
-        N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, n, constants)
+        N_block = compute_ζ_points!(ζ, W, N[i], N[i+1], ϵ, n, constants, Q)
         @views indices[i+1:end] .+= N_block
     end
 end
