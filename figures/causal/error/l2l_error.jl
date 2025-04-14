@@ -40,4 +40,4 @@ end
 
 fig = create_error_plot(ϵ_range, r̃_range, res_step, res_synth; title= L"\text{Error in the line to line case}; \ \tilde{D}_s = \tilde{D}_t = %$(Int(D/rb)), \ \tilde{H}_s=\tilde{H}_t=%$(Int(H/rb))")
 
-save("figures/causal/error/l2l_error.pdf", fig)
+save("$(@__DIR__)/l2l_error.pdf", fig)

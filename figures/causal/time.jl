@@ -125,3 +125,21 @@ for (i, ϵ) in enumerate(ϵ_range)
     b_evolve = @benchmark evolve!($Ib, $q, $block)
     simulation_no_update[i, 3] = minimum(b_evolve.times)
 end
+
+convolution = zeros(length(ϵ_range), 3)
+
+for (i, ϵ) in enumerate(ϵ_range)
+    @show ϵ
+
+    # Point to point
+    b_conv = @benchmark convolve_step($q, $setup_p2p; params=$constants, ϵ=$ϵ)
+    convolution[i, 1] = minimum(b_conv.times)
+
+    # Line to point
+    b_conv = @benchmark convolve_step($q, $setup_l2p; params=$constants, ϵ=$ϵ)
+    convolution[i, 2] = minimum(b_conv.times)
+
+    # Line to line
+    b_conv = @benchmark convolve_step($q, $setup_l2l; params=$constants, ϵ=$ϵ)
+    convolution[i, 3] = minimum(b_conv.times)
+end

@@ -41,4 +41,4 @@ end
 
 fig = create_error_plot(ϵ_range, r̃_range, res_step, res_synth, title= L"\text{Error in the line to point case}; \ \tilde{D} = %$(Int(D/rb)), \ \tilde{H}=%$(Int(H/rb))")
 
-save("figures/causal/error/l2p_error.pdf", fig)
+save("$(@__DIR__)/l2p_error.pdf", fig)

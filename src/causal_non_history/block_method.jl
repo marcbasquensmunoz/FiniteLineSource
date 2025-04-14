@@ -128,6 +128,7 @@ function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
 
     if isempty(Kranges) return end
 
+    bh_indices = 1:size(block.K_min)[1]
     for (nt, qt) in enumerate(q)
         current_q = load_buffer[1]
         push!(load_buffer, qt)
@@ -144,12 +145,11 @@ function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
             qout = i == length(load_delays) ? 0. : load_delays[i][1]
             push!(load_delays[i], qin)
             current_q = qout
-            @inbounds @views @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
+            @views @inbounds @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
         end
 
         @. F = expt * F + qaux
 
-        bh_indices = 1:size(block.K_min)[1]
         for target in bh_indices
             for source in bh_indices
                 if source == target continue end

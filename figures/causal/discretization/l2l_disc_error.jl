@@ -66,4 +66,4 @@ axislegend(""; position= :rt, backgroundcolor = (:grey90, 0.25));
 
 fig
 
-save("figures/causal/l2l_disc.pdf", fig)
+save("$(@__DIR__)/l2l_disc.pdf", fig)

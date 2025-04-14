@@ -50,4 +50,4 @@ axislegend(""; position= :rt, backgroundcolor = (:grey90, 0.25));
 
 fig
 
-save("figures/causal/p2p_disc.pdf", fig)
+save("$(@__DIR__)/p2p_disc.pdf", fig)

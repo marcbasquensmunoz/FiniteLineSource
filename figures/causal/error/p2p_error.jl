@@ -32,4 +32,4 @@ end
 
 fig = create_error_plot(ϵ_range, r̃_range, res_step, res_synth; xlabel=:r, title= L"\text{Error in the point to point case}")
 
-save("figures/causal/error/p2p_error.pdf", fig)
+save("$(@__DIR__)/p2p_error.pdf", fig)
