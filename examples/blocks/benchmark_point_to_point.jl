@@ -1,9 +1,9 @@
 using FiniteLineSource
-using BenchmarkTools
+using FiniteLineSource: PointSource
 
 ϵ = 1e-6
 Δt = 3600.
-Nt = 20000
+Nt = 8760*20
 
 α = 1e-6
 kg = 3.
@@ -14,7 +14,7 @@ B = 1.
 
 q = [1. for t in 1:Nt]
 
-positions = [(0., 0., 0.), (B, 0., 0.)]
+positions = [PointSource(0., 0., 0.), PointSource(B, 0., 0.)]
 
 
 #####################################
@@ -40,7 +40,7 @@ err = @. abs(Ib[1, :] - C)
 Inh = zeros(Nt)
 
 # Precomputation
-block = @btime prepare_containers(setup, positions, ϵ, Nt, constants, nothing);
+block = @btime prepare_containers(setup, positions, ϵ, Nt, constants);
 precomp = @btime precompute_parameters(setup, params=constants, ϵ=ϵ);
 
 # Simulation 

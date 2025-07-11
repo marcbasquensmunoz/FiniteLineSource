@@ -53,7 +53,7 @@ function compute_ζ_points_line!(ζ, W, N, No, ϵ, ϵ´, n, Q, presetup::Segment
         @unpack Δt̃, rb, kg = constants
         ω1 = r1
         ω2 = r3
-        ζ -> Q/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+        ζ -> Q/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) - exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) #=* (1 - exp(-ζ^2*Δt̃))=# / ζ
     end
 
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=Q*ϵ)
@@ -103,12 +103,21 @@ function compute_line_integral(params::LineIntegralParams; containers)
     return I 
 end
 
-#=
-function bakhalov_discretization(N, setup, params::Constants)
-    @unpack D, H, z = setup
-    @unpack Δt̃, rb, kg = params
-    σ = rb
+self_setup(::SegmentToPoint, source) = SegmentToPoint(D=source.D, H=source.H, z=source.D+source.H/2, σ=source.rb)
+
+function constant_integral(setup::SegmentToPoint, constants::Constants, N) 
+    @unpack D, H, z, σ = setup
+    @unpack Δt̃, α, kg = constants
+    rb = σ
+    r(zp) = sqrt(rb^2 + (zp - z)^2)
+    quadgk(zp -> erf(r(zp)/rb/sqrt(4*N*Δt̃)) / r(zp), D, D+H)[1] / (4π * kg)
+end
+
+function bakhalov_discretization(ϵ, N, setup, params::Constants)
+    @unpack D, H, z, σ = setup
+    @unpack Δt̃, kg = params
     n = 10
+    rb = σ
 
     z_int = log((z-D + sqrt(σ^2 + (z-D)^2)) / (z-D-H + sqrt(σ^2 + (z-D-H)^2)))
     a = 0.
@@ -124,12 +133,13 @@ function bakhalov_discretization(N, setup, params::Constants)
 
     expt = @. exp(-x^2 * Δt̃)
     exptout = @. exp(-x^2 * N * Δt̃)
-    Ic = log((z-D + sqrt(σ^2 + (z-D)^2))/(z-D-H + sqrt(σ^2 + (z-D-H)^2))) /  (4π * kg)
-    Icout = quadgk(zp -> erf(sqrt(rb^2 + (zp - z)^2)/rb/sqrt(4*N*Δt̃)) / sqrt(rb^2 + (zp - z)^2), D, D+H)[1] / (4π * kg)
 
-    x[perm], w[perm], fx, expt, exptout, Ic, Icout
+    r(zp) = sqrt(rb^2 + (zp - z)^2)
+    Ic = log((z-D + r(D))/(z-D-H + r(D+H))) /  (4π * kg)
+    Icout = quadgk(zp -> erf(r(zp)/rb/sqrt(4*N*Δt̃)) / r(zp), D, D+H)[1] / (4π * kg)
+
+    x[perm], w[perm], fx, expt[perm], exptout[perm], Ic, Icout
 end
-=#
 
 function minimum_distance_line_to_point(source, target)
     σ = compute_distance_2D(source, target)
@@ -246,7 +256,7 @@ function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, const
     @unpack kg, rb = constants
     C = 1 / (2π^2*kg)
 
-    for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
+    for j in eachindex(sources), i in 1:j, (k, ζζ) in enumerate(ζ)
         σ = i == j ? rb : distances[i, j]
         source = sources[j]
         target = sources[i]

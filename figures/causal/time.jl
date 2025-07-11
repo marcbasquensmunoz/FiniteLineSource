@@ -2,6 +2,7 @@ using FiniteLineSource
 using FiniteLineSource: PointSource, LineSource
 using BenchmarkTools
 using Interpolations
+using DSP
 
 Nt = 8760*20
 
@@ -126,20 +127,52 @@ for (i, ϵ) in enumerate(ϵ_range)
     simulation_no_update[i, 3] = minimum(b_evolve.times)
 end
 
+convolution_precomp = zeros(length(ϵ_range), 3)
 convolution = zeros(length(ϵ_range), 3)
 
 for (i, ϵ) in enumerate(ϵ_range)
     @show ϵ
 
     # Point to point
-    b_conv = @benchmark convolve_step($q, $setup_p2p; params=$constants, ϵ=$ϵ)
+    #b_conv = @benchmark convolve_step($q, $setup_p2p; params=$constants, ϵ=$ϵ)
+    b_conv_precomp = @benchmark begin
+        t = $Δt:$Δt:$Δt*length($q)
+        response = step_response.(t, Ref($setup_p2p), Ref($constants), ϵ=$ϵ)
+    end
+    t = Δt:Δt:Δt*length(q)
+    response = step_response.(t, Ref(setup_p2p), Ref(constants), ϵ=ϵ)
+    b_conv = @benchmark begin
+        qdiff = diff([0; $q])
+        DSP.conv(qdiff, $response)[1:length(qdiff)]
+    end
+    convolution_precomp[i, 1] = minimum(b_conv_precomp.times)
     convolution[i, 1] = minimum(b_conv.times)
 
     # Line to point
-    b_conv = @benchmark convolve_step($q, $setup_l2p; params=$constants, ϵ=$ϵ)
+    b_conv_precomp = @benchmark begin
+        t = $Δt:$Δt:$Δt*length($q)
+        response = step_response.(t, Ref($setup_l2p), Ref($constants), ϵ=$ϵ)
+    end
+    t = Δt:Δt:Δt*length(q)
+    response = step_response.(t, Ref(setup_l2p), Ref(constants), ϵ=ϵ)
+    b_conv = @benchmark begin
+        qdiff = diff([0; $q])
+        DSP.conv(qdiff, $response)[1:length(qdiff)]
+    end
+    convolution_precomp[i, 2] = minimum(b_conv_precomp.times)
     convolution[i, 2] = minimum(b_conv.times)
 
     # Line to line
-    b_conv = @benchmark convolve_step($q, $setup_l2l; params=$constants, ϵ=$ϵ)
+    b_conv_precomp = @benchmark begin
+        t = $Δt:$Δt:$Δt*length($q)
+        response = step_response.(t, Ref($setup_l2l), Ref($constants), ϵ=$ϵ)
+    end
+    t = Δt:Δt:Δt*length(q)
+    response = step_response.(t, Ref(setup_l2l), Ref(constants), ϵ=ϵ)
+    b_conv = @benchmark begin
+        qdiff = diff([0; $q])
+        DSP.conv(qdiff, $response)[1:length(qdiff)]
+    end
+    convolution_precomp[i, 3] = minimum(b_conv_precomp.times)
     convolution[i, 3] = minimum(b_conv.times)
 end

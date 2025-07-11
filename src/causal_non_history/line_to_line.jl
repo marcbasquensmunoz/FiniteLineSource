@@ -39,11 +39,22 @@ function compute_distance(::SegmentToSegment, source, target, constants::Constan
     dist, N_r
 end
 
+function constant_integral(setup::SegmentToSegment, constants::Constants, N) 
+    @unpack D1, H1, D2, H2, σ = setup
+    @unpack Δt̃, α, kg = constants
+    rb = σ
+    r(z1, z2) = sqrt(rb^2 + (z1 - z2)^2)
+    quadgk(z1 -> quadgk(z2 -> erf(r(z1, z2)/rb/sqrt(4*N*Δt̃)) / r(z1, z2), D2, D2+H2)[1], D1, D1+H1)[1] / (4π * kg * H2)
+end
+
+self_setup(::SegmentToSegment, source) = SegmentToSegment(D1=source.D, H1=source.H, D2=source.D, H2=source.H, σ=source.rb)
+
 function get_representative_ltl(sources)
     min_dist = Inf
     setup = SegmentToSegment(D1=0., H1=0., D2=0., H2=0., σ=0.)
     for (i, s) in enumerate(sources)
         for t in @views sources[1:i-1]
+            if s.strength <= 0. || t.strength <= 0. continue end
             dist = minimum_distance(s, t)
             if dist < min_dist
                 min_dist = dist
@@ -100,13 +111,17 @@ function compute_N_for_line_to_line_range(h, setup, constants, ϵ, Nt, Ndef, Q)
 end
 
 function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
-    @unpack kg, α, Δt, Δt̃, rb = constants
+    if length(sources) == 1
+        return [Nt], [sources[1].rb * 100]
+    end
+    @unpack kg, α, Δt, Δt̃ = constants
 
     ratio = 3.
     setup, min_dist = get_representative_ltl(sources)
     @unpack D1, H1, D2, H2, σ = setup
 
     Nmin = compute_N(min_dist, ϵ, constants, Nt, Q)
+
     if I_L2L(0., Nt, setup, constants, ϵ) < ϵ/Q
         N = Int[Nt]
     else 
@@ -130,6 +145,7 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
                 break
             end
             Nd = compute_N(d, ϵ, constants, Q)
+            @show h, setup, constants, ϵ, Nt, Nd, Q
             Nr = compute_N_for_line_to_line_range(h, setup, constants, ϵ, Nt, Nd, Q)
         else 
             Nr = compute_N(d, ϵ, constants, Q)
@@ -137,8 +153,10 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
         i += 1
         if Nr < N[end] continue end
         if Nr > Nt || Nt * 0.75 < Nr < Nt break end
-        push!(N, Nr)
-        push!(ND, d)
+        if !(Nr in N) && N[end] < Nr * 0.75
+            push!(N, Nr)
+            push!(ND, d)
+        end
     end
     if N[end] < Nt
         push!(N, Nt)
@@ -151,6 +169,16 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
         end
         push!(ND, sqrt(σ^2 + min(edge^2, maxh^2)))
     end
+    @show N
+    zero_indices = findall(==(0), N)
+    deleteat!(N, zero_indices)
+    deleteat!(ND, zero_indices)
+    #=
+    push!(N, 1)
+    push!(ND, compute_r(1, ϵ, constants, Q))
+    perm = sortperm(N)
+    return N[perm], ND[perm]
+    =#
     return N, ND
 end 
 
@@ -218,13 +246,17 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     z_int = β(D1+H1-D2-H2) + β(D1-D2) - β(D1-H2-D2) - β(D1+H1-D2)
 
     a = 0.
-    f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃, kg=kg
-        b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4*π^2*kg * ϵ/Q
-    end    
-    b0 = sqrt(-log(ϵ/Q) / (N*Δt̃))
-    problem = ZeroProblem(f, b0)
-    sol_b = abs(solve(problem))
-    b = isnan(sol_b) || sol_b == 0 || sol_b > 10 ? b0 : sol_b
+    if N != 0
+        f = let z_int=z_int, ϵ=ϵ, ϵ´=ϵ´, N=N, No=No, Δt̃=Δt̃, kg=kg
+            b -> (gamma(0, b^2*(N-1)*Δt̃) - gamma(0, b^2*(No-1)*Δt̃)) * (z_int - ϵ´) + ϵ´ * log((No-1)/(N-1)) - 4*π^2*kg * ϵ/Q
+        end    
+        b0 = sqrt(-log(ϵ/Q) / (N*Δt̃))
+        problem = ZeroProblem(f, b0)
+        sol_b = abs(solve(problem))
+        b = isnan(sol_b) || sol_b == 0 || sol_b > 10 ? b0 : sol_b
+    else 
+        b = 10.
+    end
 
     params = LineToLineIntegralParams(presetup, 0., ϵ/Q)
     paramsT = LineToLineIntegralParams(transpose(presetup), 0., ϵ/Q)
@@ -232,7 +264,7 @@ function compute_ζ_points_line_to_line!(ζ, W, N, No, ϵ, ϵ´, n, presetup::Se
     ω2 = max(params.r4, paramsT.r4)
 
     guide = let N=N, No=No, ω1=ω1, ω2=ω2, Δt̃=Δt̃, kg=kg, rb=rb, Q=Q
-        ζ -> Q/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) + exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+        ζ -> Q/(2 * π^2 * kg) * (acosh(ω2/σ) - acosh(ω1/σ)) * (No-N) * (exp(-ζ^2*N*Δt̃) - exp(-ζ^2*No*Δt̃)) * (sin(ζ*ω2/rb) - sin(ζ*ω1/rb)) #=* (1 - exp(-ζ^2*Δt̃))=# / ζ
     end
     _, _, segbuf = quadgk_segbuf(guide, a, b, order=n, atol=Q*ϵ)
     
@@ -270,9 +302,10 @@ function compute_ζ_discretization!(ζ, W, indices, ::SegmentToSegment; sources,
 end
 
 function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
-    @unpack kg, rb = constants
+    @unpack kg = constants
     C = 1 / (2π^2*kg)
-    for j in eachindex(sources), i in 1:j-1, (k, ζζ) in enumerate(ζ)
+    for j in eachindex(sources), i in 1:j, (k, ζζ) in enumerate(ζ)
+        rb = sources[j].rb
         σ = i == j ? rb : distances[i, j]
         source = sources[j]
         target = sources[i]
@@ -282,7 +315,7 @@ function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, con
         lineparams = FiniteLineSource.LineToLineIntegralParams(setup, ζζ/rb, ϵ, h)
         lineparamsT = FiniteLineSource.LineToLineIntegralParams(transpose(setup), ζζ/rb, ϵ, h)
 
-        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_double_line_integral(lineparams, lineparamsT; containers=containers)
+        @inbounds HM[k, i, j] = source.strength * C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_double_line_integral(lineparams, lineparamsT; containers=containers)
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end

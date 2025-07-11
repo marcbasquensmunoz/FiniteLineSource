@@ -46,6 +46,7 @@ function choose_blocks(::PointToPoint, sources, Nt, ϵ, constants, Q)
         Ncurrent *= 10
     end
     push!(N, Nt)
+    deleteat!(N, findall(==(0), N))
     return N, map(n -> compute_r(n, ϵ, constants, Q), N)
 end
 

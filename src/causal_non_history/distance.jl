@@ -1,6 +1,6 @@
 
 compute_distance_3D(s, t) = sqrt((s.x - t.x)^2 + (s.y - t.y)^2 + (s.z - t.z)^2)
-compute_distance_2D(s, t) = sqrt((s.x - t.x)^2 + (s.y - t.y)^2)
+compute_distance_2D(s, t) = max(sqrt((s.x - t.x)^2 + (s.y - t.y)^2), s.rb)
 
 minimum_distance(source::PointSource, target::PointSource) = compute_distance_3D(source, target)
 

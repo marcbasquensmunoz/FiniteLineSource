@@ -80,7 +80,12 @@ primary_colors = Makie.wong_colors()
 lighten(color) = RGBA(color.r, color.g, color.b, 0.5)
 secondary_colors = lighten.(primary_colors)
 
+
 block_figs = Figure[]
+block_height_margin = 1.
+line_limit_width = 3.
+text_margin = 10.
+figure_margin = 20.
 
 for i in 2:length(block.N)
     fig = Figure()
@@ -91,8 +96,36 @@ for i in 2:length(block.N)
 
     axislegend("", position = :rt)
 
+    ax_inset = Axis(fig[1, 1],
+        backgroundcolor=(:white,1),
+        aspect = 1,
+        width=Relative(0.3),
+        height=Relative(0.4),
+        halign=1.,
+        valign=0.65,
+        title="")
+    translate!(ax_inset.scene, 0, 0, 10)
+    translate!(ax_inset.elements[:background], 0, 0, 9)
+    hidedecorations!(ax_inset)
+
+    lines!(ax_inset, [0, 0], [-H/2,H/2], color=:black)
+    lines!(ax_inset, [-line_limit_width, line_limit_width], [-H/2,-H/2], color=:black)
+    lines!(ax_inset, [-line_limit_width, line_limit_width], [H/2,H/2], color=:black)
+    
+    # Draw target point
+    scatter!(ax_inset, [σ], [0], color=:black)
+
+    # Draw reduced integration region
+    HB = H_eff[i]
+    lines!(ax_inset, [0, 0], [-HB/2,HB/2], color=primary_colors[i-1], linewidth=6)
+    lines!(ax_inset, [0, 0], [-H/2,H/2], color=secondary_colors[i-1], linewidth=4)
+    text!(ax_inset, -10, 0, text=L"%$(round(HB, digits=1))m", align = (:right, :center), fontsize=20, color=primary_colors[i-1])
+    L = H/2 * 1.1
+    xlims!(ax_inset, -L/2, L/4)
+    ylims!(ax_inset, -L, L)
+
     push!(block_figs, fig)
-    save("$(@__DIR__)/block_$i.pdf", fig)
+    save("$(@__DIR__)/short_block_$i.pdf", fig)
 end
 
 
@@ -105,44 +138,4 @@ fig_fist = Figure()
 ax = Axis(fig_fist[1, 1], xlabel = L"\zeta", title = "Integrand for block 1")
 lines!(ax, ζ[1], I_region[1], label = "Reduced integration region")
 
-save("$(@__DIR__)/first_block.pdf", fig_fist)
-
-
-
-###############################################
-# Make image of lines with integration regions 
-###############################################
-
-fig_lines = Figure()
-x_pos = [75*(i-1) for i in 1:length(block.N)-1]
-block_height_margin = 3.
-line_limit_width = 1.
-text_margin = 10.
-figure_margin = 20.
-
-ax = Axis(fig_lines[1, 1])
-hidedecorations!(ax)
-hidespines!(ax) 
-
-for (i, x) in enumerate(x_pos)
-    B = i+1
-    # Draw dource line
-    lines!(ax, [x, x], [-H/2,H/2], color=:black)
-    lines!(ax, [x-line_limit_width, x+line_limit_width], [-H/2,-H/2], color=:black)
-    lines!(ax, [x-line_limit_width, x+line_limit_width], [H/2,H/2], color=:black)
-    
-    # Draw target point
-    scatter!(ax, [x+σ], [0], color=:black)
-
-    # Draw reduced integration region
-    HB = H_eff[B]
-    lines!(ax, [x, x], [-HB/2,HB/2], color=primary_colors[i], linewidth=6)
-    text!(ax, x-block_height_margin, 0, text=L"%$(round(HB, digits=1))m", align = (:right, :center), fontsize=20, color=primary_colors[i])
-
-    text!(ax, x, H/2+text_margin, text="Block $B", align = (:center, :center), fonts =(; regular= "arial"), fontsize=20)    
-end
-text!(ax, sum(x_pos)/2, -H/2-text_margin, text=L"H=%$(Int(round(H, digits=0)))m, \ σ=%$(Int(round(σ, digits=0)))m ", align = (:center, :center), fonts =(; regular= "arial"), fontsize=20)
-    
-xlims!(ax, x_pos[1]-figure_margin, x_pos[end]+figure_margin)
-fig_lines   
-save("$(@__DIR__)/line_sources_blocks.pdf", fig_lines)
+save("$(@__DIR__)/short_first_block.pdf", fig_fist)

@@ -1,18 +1,25 @@
 
 struct BlockMethod{T <: Number}
     ζ::Vector{T}
-    F::Vector{T}
+    F::Matrix{T}
     expt::Vector{T}
     expNin::Vector{T}
     expNout::Vector{T}
     HM::Array{T, 3}
-    load_delays::Vector{CircularBuffer{T}}
-    load_buffer::CircularBuffer{T}
+    load_delays::Matrix{CircularBuffer{T}}
+    load_buffer::Vector{CircularBuffer{T}}
     ranges::Vector{UnitRange{Int}}
     Kranges::Vector{UnitRange{Int}}
     K_min::Matrix{Int}
     qaux::Vector{T}
     N::Vector{Int}
+    sr_ζ::Vector{Vector{T}}
+    sr_w::Vector{Vector{T}}
+    sr_F::Vector{Vector{T}}
+    sr_expt::Vector{Vector{T}}
+    sr_expNout::Vector{Vector{T}}
+    sr_Ic::Vector{T}
+    sr_Icout::Vector{T}
 end
 
 @with_kw struct PointSource{T <: Number} @deftype T
@@ -25,6 +32,8 @@ end
     y
     D
     H
+    rb = 0.1
+    strength = 1.
 end
 
 function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q=1.)
@@ -61,6 +70,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
             K_min[i, j] = Km
             K_min[j, i] = Km
         end
+        K_min[j, j] = 1
     end
    
     ζ = zeros(0)
@@ -71,10 +81,28 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 
-    #sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = bakhalov_discretization(10, setup)
+    sr_ζ = Vector{Float64}[]
+    sr_w = Vector{Float64}[]
+    sr_F = Vector{Float64}[]
+    sr_expt = Vector{Float64}[]
+    sr_expNout = Vector{Float64}[]
+    sr_Ic = Float64[]
+    sr_Icout = Float64[]
+
+    for i in 1:Ns
+        sr_setup = self_setup(setup, sources[i])
+        precomp = precompute_parameters(sr_setup, params=constants)
+        push!(sr_ζ, precomp.x)
+        push!(sr_w, precomp.w)
+        push!(sr_F, precomp.fx)
+        push!(sr_expt, @. exp(-precomp.x^2*Δt̃))
+        push!(sr_Ic, precomp.I_c)
+        push!(sr_expNout,  @. exp(-precomp.x^2 * N[1] * Δt̃))
+        push!(sr_Icout, constant_integral(sr_setup, constants, N[1]))
+    end
     
     # Preallocate objects
-    F = zeros(length(ζ))
+    F = zeros(length(ζ), Ns)
     expt = @. exp(-ζ^2*Δt̃)
     expNin = zeros(length(ζ))
     expNout = zeros(length(ζ))
@@ -85,9 +113,12 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
             @inbounds @. @views expNout[ranges[i]] = exp(-ζ[ranges[i]]^2*N[i+1]*Δt̃)
         end
     end
-    load_delays = [CircularBuffer{Float64}(N[i+1] - N[i]) for i in 1:K]
-    load_buffer = CircularBuffer{Float64}(N[1])
-    fill!(load_buffer, 0.)
+
+    load_delays = [CircularBuffer{Float64}(N[i+1] - N[i]) for i in 1:K, _ in 1:Ns]
+    load_buffer = [CircularBuffer{Float64}(N[1]) for _ in 1:Ns]
+    for buffer in load_buffer
+        fill!(buffer, 0.)
+    end
     for load_delay in load_delays
         fill!(load_delay, 0.)
     end
@@ -111,50 +142,55 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         Kranges, 
         K_min, 
         qaux, 
-        N
-        #=sr_ζ,
+        N,
+        sr_ζ,
         sr_w,
         sr_F,
         sr_expt,
         sr_expNout,
         sr_Ic,
-        sr_Icout=#
+        sr_Icout
     )
 end
 
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
-        ranges, Kranges, K_min, qaux#=, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout =#= block
+        ranges, Kranges, K_min, qaux, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = block
 
-    if isempty(Kranges) return end
+    #if isempty(Kranges) return end
 
-    bh_indices = 1:size(block.K_min)[1]
-    for (nt, qt) in enumerate(q)
-        current_q = load_buffer[1]
-        push!(load_buffer, qt)
+    Nb = size(q)[1]
+    Nt = size(q)[2]
+    K = size(load_delays)[1]
+    for nt in 1:Nt
+        current_q = map(x->x[1], block.load_buffer)
+        @views for (q, b) in zip(q[:, nt], block.load_buffer)
+            push!(b, q)
+        end
+
+        for j in 1:Nb
+            @. sr_F[j] = sr_expt[j] * (sr_F[j] - q[j, nt] / sr_ζ[j] + sr_expNout[j] * current_q[j] / sr_ζ[j])
+            I[j, nt] += dot(sr_F[j], sr_w[j]) + q[j, nt] * sr_Ic[j] - current_q[j] * sr_Icout[j]
+            @. sr_F[j] = sr_F[j] + (q[j, nt] - sr_expNout[j] * current_q[j]) / sr_ζ[j]
+        end
+            
+            for j in 1:Nb
+                qaux .= 0.
+                for i in 1:K
+                    qin = current_q[j]
+                    qout = i == K ? 0. : load_delays[i, j][1]
+                    push!(load_delays[i, j], qin)
+                    current_q[j] = qout
+                    @views @inbounds @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
+                end
+                @views @. F[:, j] = expt * F[:, j] + qaux
+            end
+
         
-        #=
-        @. sr_F = sr_expt * (sr_F - qt / sr_ζ + sr_expNout * current_q / sr_ζ)
-        for target in 1:size(block.K_min)[1]
-            I[target, nt] += dot(sr_F, sr_w) + qt * sr_Ic - current_q * sr_Icout
-        end
-        @. sr_F = sr_F + (qt - sr_expNout * current_q) / sr_ζ
-        =#
-        for i in eachindex(load_delays)
-            qin = current_q
-            qout = i == length(load_delays) ? 0. : load_delays[i][1]
-            push!(load_delays[i], qin)
-            current_q = qout
-            @views @inbounds @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
-        end
-
-        @. F = expt * F + qaux
-
-        for target in bh_indices
-            for source in bh_indices
-                if source == target continue end
+        for target in 1:Nb
+            for source in 1:Nb
                 @inbounds range = Kranges[K_min[source, target]]
-                @inbounds @views I[target, nt] += dot(F[range], HM[range, target, source])
+                @inbounds @views I[target, nt] += dot(F[range, source], HM[range, target, source])
             end
         end
     end
