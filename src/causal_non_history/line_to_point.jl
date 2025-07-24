@@ -107,7 +107,7 @@ self_setup(::SegmentToPoint, source) = SegmentToPoint(D=source.D, H=source.H, z=
 
 function constant_integral(setup::SegmentToPoint, constants::Constants, N) 
     @unpack D, H, z, σ = setup
-    @unpack Δt̃, α, kg = constants
+    @unpack Δt̃, kg = constants
     rb = σ
     r(zp) = sqrt(rb^2 + (zp - z)^2)
     quadgk(zp -> erf(r(zp)/rb/sqrt(4*N*Δt̃)) / r(zp), D, D+H)[1] / (4π * kg)

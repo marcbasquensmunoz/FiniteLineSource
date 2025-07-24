@@ -12,10 +12,12 @@ constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 
 B = 1.
 
-q = [1. for t in 1:Nt]
+q = hcat(
+    [1. for t in 1:Nt], 
+    [1. for t in 1:Nt], 
+)'
 
-positions = [PointSource(0., 0., 0.), PointSource(B, 0., 0.)]
-
+positions = [PointSource(0., 0., 0., rb), PointSource(B, 0., 0., rb)]
 
 #####################################
 # Error analysis
@@ -23,13 +25,15 @@ positions = [PointSource(0., 0., 0.), PointSource(B, 0., 0.)]
 setup = PointToPoint(r = B)
 
 # Block method
-block = prepare_containers(setup, positions, ϵ, Nt, constants);
+block = prepare_containers(setup, positions, ϵ, Nt, constants, compute_self_response=false);
 Ib = zeros(length(positions), Nt)
 evolve!(Ib, q, block)
 
 # Convolution
-C = convolve_step(q, setup; params=constants)
+C_int = convolve_step(q[2,:], setup; params=constants)
+C_sr = convolve_step(q[1,:], PointToPoint(r=rb); params=constants)
 
+C = C_int #+ C_sr
 # Error
 err = @. abs(Ib[1, :] - C)
 

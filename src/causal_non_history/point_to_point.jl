@@ -1,3 +1,5 @@
+self_setup(::PointToPoint, source) = PointToPoint(r=source.rb)
+
 function compute_distance(::PointToPoint, source, target, constants::Constants, ϵ, Nt, Q)
     dist = minimum_distance(source, target)
     N_r = compute_N(dist, ϵ, constants, Q, Nt) 
@@ -103,4 +105,10 @@ function compute_H!(HM, ::PointToPoint; ζ, W, expt, sources, distances, constan
         HM[k, i, j] = C * W[k] * sin(r/rb*ζζ) / (r*ζζ) * (1 - expt[k])
         HM[k, j, i] = HM[k, i, j]
     end
+end
+
+function constant_integral(setup::PointToPoint, constants::Constants, N)
+    @unpack r = setup
+    @unpack Δt, α, kg, rb = constants
+    erf(r/sqrt(4*N*Δt*α)) / (4π * kg * r)
 end

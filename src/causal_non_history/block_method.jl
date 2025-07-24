@@ -20,12 +20,14 @@ struct BlockMethod{T <: Number}
     sr_expNout::Vector{Vector{T}}
     sr_Ic::Vector{T}
     sr_Icout::Vector{T}
+    compute_self_response::Bool
 end
 
 @with_kw struct PointSource{T <: Number} @deftype T
     x
     y
     z
+    rb = 0.1
 end
 @with_kw struct LineSource{T <: Number} @deftype T
     x
@@ -36,7 +38,7 @@ end
     strength = 1.
 end
 
-function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q=1.)
+function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q=1., compute_self_response=true)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10
@@ -89,16 +91,18 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     sr_Ic = Float64[]
     sr_Icout = Float64[]
 
-    for i in 1:Ns
-        sr_setup = self_setup(setup, sources[i])
-        precomp = precompute_parameters(sr_setup, params=constants)
-        push!(sr_ζ, precomp.x)
-        push!(sr_w, precomp.w)
-        push!(sr_F, precomp.fx)
-        push!(sr_expt, @. exp(-precomp.x^2*Δt̃))
-        push!(sr_Ic, precomp.I_c)
-        push!(sr_expNout,  @. exp(-precomp.x^2 * N[1] * Δt̃))
-        push!(sr_Icout, constant_integral(sr_setup, constants, N[1]))
+    if compute_self_response
+        for i in 1:Ns
+            sr_setup = self_setup(setup, sources[i])
+            precomp = precompute_parameters(sr_setup, params=constants)
+            push!(sr_ζ, precomp.x)
+            push!(sr_w, precomp.w)
+            push!(sr_F, precomp.fx)
+            push!(sr_expt, @. exp(-precomp.x^2*Δt̃))
+            push!(sr_Ic, precomp.I_c)
+            push!(sr_expNout,  @. exp(-precomp.x^2 * N[1] * Δt̃))
+            push!(sr_Icout, constant_integral(sr_setup, constants, N[1]))
+        end
     end
     
     # Preallocate objects
@@ -149,13 +153,14 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         sr_expt,
         sr_expNout,
         sr_Ic,
-        sr_Icout
+        sr_Icout,
+        compute_self_response
     )
 end
 
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
-        ranges, Kranges, K_min, qaux, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout = block
+        ranges, Kranges, K_min, qaux, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout, compute_self_response = block
 
     #if isempty(Kranges) return end
 
@@ -168,27 +173,30 @@ function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
             push!(b, q)
         end
 
-        for j in 1:Nb
-            @. sr_F[j] = sr_expt[j] * (sr_F[j] - q[j, nt] / sr_ζ[j] + sr_expNout[j] * current_q[j] / sr_ζ[j])
-            I[j, nt] += dot(sr_F[j], sr_w[j]) + q[j, nt] * sr_Ic[j] - current_q[j] * sr_Icout[j]
-            @. sr_F[j] = sr_F[j] + (q[j, nt] - sr_expNout[j] * current_q[j]) / sr_ζ[j]
+        if compute_self_response
+            for j in 1:Nb
+                @. sr_F[j] = sr_expt[j] * (sr_F[j] - q[j, nt] / sr_ζ[j] + sr_expNout[j] * current_q[j] / sr_ζ[j])
+                I[j, nt] += dot(sr_F[j], sr_w[j]) + q[j, nt] * sr_Ic[j] - current_q[j] * sr_Icout[j]
+                @. sr_F[j] = sr_F[j] + (q[j, nt] - sr_expNout[j] * current_q[j]) / sr_ζ[j]
+            end
         end
             
-            for j in 1:Nb
-                qaux .= 0.
-                for i in 1:K
-                    qin = current_q[j]
-                    qout = i == K ? 0. : load_delays[i, j][1]
-                    push!(load_delays[i, j], qin)
-                    current_q[j] = qout
-                    @views @inbounds @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
-                end
-                @views @. F[:, j] = expt * F[:, j] + qaux
+        for j in 1:Nb
+            qaux .= 0.
+            for i in 1:K
+                qin = current_q[j]
+                qout = i == K ? 0. : load_delays[i, j][1]
+                push!(load_delays[i, j], qin)
+                current_q[j] = qout
+                @views @inbounds @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
             end
+            @views @. F[:, j] = expt * F[:, j] + qaux
+        end
 
         
         for target in 1:Nb
             for source in 1:Nb
+                if !compute_self_response && source == target continue end
                 @inbounds range = Kranges[K_min[source, target]]
                 @inbounds @views I[target, nt] += dot(F[range, source], HM[range, target, source])
             end

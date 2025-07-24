@@ -41,7 +41,7 @@ end
 
 function constant_integral(setup::SegmentToSegment, constants::Constants, N) 
     @unpack D1, H1, D2, H2, σ = setup
-    @unpack Δt̃, α, kg = constants
+    @unpack Δt̃, kg = constants
     rb = σ
     r(z1, z2) = sqrt(rb^2 + (z1 - z2)^2)
     quadgk(z1 -> quadgk(z2 -> erf(r(z1, z2)/rb/sqrt(4*N*Δt̃)) / r(z1, z2), D2, D2+H2)[1], D1, D1+H1)[1] / (4π * kg * H2)
@@ -145,7 +145,6 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
                 break
             end
             Nd = compute_N(d, ϵ, constants, Q)
-            @show h, setup, constants, ϵ, Nt, Nd, Q
             Nr = compute_N_for_line_to_line_range(h, setup, constants, ϵ, Nt, Nd, Q)
         else 
             Nr = compute_N(d, ϵ, constants, Q)
@@ -169,7 +168,6 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
         end
         push!(ND, sqrt(σ^2 + min(edge^2, maxh^2)))
     end
-    @show N
     zero_indices = findall(==(0), N)
     deleteat!(N, zero_indices)
     deleteat!(ND, zero_indices)
