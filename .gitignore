@@ -1,3 +1,5 @@
 /Manifest.toml
 /benchmark/*.json
 .DS_Store
+*.pb.gz
+.vscode

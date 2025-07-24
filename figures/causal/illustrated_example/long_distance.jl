@@ -25,7 +25,7 @@ setup = SegmentToPoint(D=D, H=H, z=D+H/2, σ=σ)
 
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 
-q = ones(Nt)
+q = ones(2, Nt)
 
 sources = [LineSource(x=0., y=0., D=D, H=H), LineSource(x=σ, y=0., D=D, H=H)]
 
