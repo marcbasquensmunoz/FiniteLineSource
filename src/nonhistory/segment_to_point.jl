@@ -4,6 +4,7 @@
     H
     σ
     z
+    image_strength = 0.
 end
 
 struct STPComputationContainers{T <: Number} <: ComputationContainers

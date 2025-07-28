@@ -154,15 +154,15 @@ function minimum_distance_line_to_point(source, target)
     return dist
 end
 
-function get_representative_ltp(sources)
+function get_representative_ltp(sources, image_strength)
     min_dist = Inf
-    setup = SegmentToPoint(D=0., H=0., z=0., σ=0.)
+    setup = SegmentToPoint(D=0., H=0., z=0., σ=0., image_strength = image_strength)
     for (i, s) in enumerate(sources)
         for t in @views sources[1:i-1]
             dist = min(minimum_distance_line_to_point(s, t), minimum_distance_line_to_point(t, s))
             if dist < min_dist
                 min_dist = dist
-                setup = SegmentToPoint(D=s.D, H=s.H, z=t.D+t.H/2, σ=compute_distance_2D(s, t))
+                setup = SegmentToPoint(D=s.D, H=s.H, z=t.D+t.H/2, σ=compute_distance_2D(s, t), image_strength = image_strength)
             end
         end
     end
@@ -193,9 +193,9 @@ end
 
 function I_L2P(h, N, setup, constants, ϵ)
     @unpack α, kg, Δt = constants
-    @unpack σ, D, H, z = setup
+    @unpack σ, D, H, z, image_strength = setup
     if N <= 0 return 0. end
-    return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D)) - erf(s*(z-D-H)) - erf(s*(z+D+H)) + erf(s*(z+D))- ( erf(s*(z-max(z-h, D))) - erf(s*(z-min(z+h, D+H))) - erf(s*(z-max(min(z-h, -D), -D-H))) + erf(s*(z+D)))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
+    return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D)) - erf(s*(z-D-H)) + image_strength * (erf(s*(z+D+H)) - erf(s*(z+D))) - ( erf(s*(z-max(z-h, D))) - erf(s*(z-min(z+h, D+H))) + image_strength * (erf(s*(z-max(min(z-h, -D), -D-H))) - erf(s*(z+D))))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
 end
 
 function compute_N_for_line_range(h, setup, constants, ϵ, Nt, Ndef, Q)
@@ -206,10 +206,10 @@ function compute_N_for_line_range(h, setup, constants, ϵ, Nt, Ndef, Q)
     end
 end
 
-function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants, Q)
+function choose_blocks(setup::SegmentToPoint, sources, Nt, ϵ, constants, Q)
     @unpack kg, α, Δt, Δt̃, rb = constants
     ratio = 3.
-    setup, min_dist = get_representative_ltp(sources)
+    setup, min_dist = get_representative_ltp(sources, setup.image_strength)
     @unpack σ, D, H, z = setup
 
     Nmin = compute_N(min_dist, ϵ, constants, Nt, Q)
@@ -228,7 +228,7 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants, Q)
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
         @show d, h
-        if h < (2H+2D)
+        if h < (z+D+H)
         #if (D <= z <= D+H && h < H/2) || h < H 
             Nd = compute_N(d, ϵ, constants, Q)
             if I_L2P(h, Nt, setup, constants, ϵ) < ϵ/Q
@@ -270,8 +270,9 @@ function compute_ζ_discretization!(ζ, W, indices, ::SegmentToPoint; sources, N
     end
 end
 
-function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
+function compute_H!(HM, setup::SegmentToPoint; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
     @unpack kg, rb = constants
+    @unpack image_strength = setup
     C = 1 / (2π^2*kg)
 
     for j in eachindex(sources), i in 1:j, (k, ζζ) in enumerate(ζ)
@@ -302,7 +303,7 @@ function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, const
         #@show setup, setup_image
         lineparams = LineIntegralParams(setup, ζζ/rb, ϵ)
         lineparams_image = LineIntegralParams(setup_image, ζζ/rb, ϵ)
-        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * (compute_line_integral(lineparams; containers=containers) - compute_line_integral(lineparams_image; containers=containers))
+        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * (compute_line_integral(lineparams; containers=containers) + image_strength * compute_line_integral(lineparams_image; containers=containers))
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end

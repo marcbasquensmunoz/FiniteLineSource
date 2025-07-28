@@ -5,17 +5,17 @@ using Parameters
 
 ϵ = 1e-4
 Δt = 3600.
-Nt = 8760
+Nt = 8760*50
 
 α = 1e-6
 kg = 3.
 rb = 0.1
 
 Ds = 0.
-Hs = 150.
+Hs = 100.
 Dt = 0.
-Ht = 150.
-B = 1.46779926762207
+Ht = 100.
+B = 1.
 
 q = hcat(
     [1. for t in 1:Nt], 
@@ -29,26 +29,28 @@ constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 # Error analysis
 #####################################
 
-setup = SegmentToPoint(D=Ds, H=Hs, z=Dt+Ht/2, σ=B)
+setup = SegmentToPoint(D=Ds, H=Hs, z=Dt+Ht/2, σ=B, image_strength = 1.)
+image_setup = SegmentToPoint(D=-Ds-Hs, H=Hs, z=Dt+Ht/2, σ=B)
 
 # Block method
 containers = FiniteLineSource.AsymptoticContainers(10)
-block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q));
+block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q), compute_self_response=false);
 Ib = zeros(length(bh_positions), Nt)
 @time evolve!(Ib, q, block)
 
 # Convolution
-C_int_1 = @time convolve_step(q[1, :], setup; params=constants)
+#C_int_1 = @time convolve_step(q[1, :], setup; params=constants)
 C_int_2 = @time convolve_step(q[2, :], setup; params=constants)
-C_sr_1 = @time convolve_step(q[1, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
-C_sr_2 = @time convolve_step(q[2, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
+C_int_2_image = @time convolve_step(q[2, :], image_setup; params=constants)
+#C_sr_1 = @time convolve_step(q[1, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
+#C_sr_2 = @time convolve_step(q[2, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
 
-C1 = C_int_2 + C_sr_1
-C2 = C_int_1 + C_sr_2
+C1 = C_int_2 + C_int_2_image #+ C_sr_1
+#C2 = C_int_1 + C_sr_2
 
 # Error
 err = @. abs(Ib[1, :] - C1)
-err = @. abs(Ib[2, :] - C2)
+#err = @. abs(Ib[2, :] - C2)
 
 
 maximum(err)
