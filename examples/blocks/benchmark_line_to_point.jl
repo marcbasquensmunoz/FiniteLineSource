@@ -20,7 +20,6 @@ B = 1.46779926762207
 q = hcat(
     [1. for t in 1:Nt], 
     [1. for t in 1:Nt], 
-    #[20*sin(2π*t/8760) + 5*sin(2π*t/24) + 5. for t in 1:Nt]
 )'
 
 bh_positions = [LineSource(x=0., y=0., D=Ds, H=Hs, rb=rb), LineSource(x=B, y=0., D=Dt, H=Ht, rb=rb)]
@@ -39,15 +38,17 @@ Ib = zeros(length(bh_positions), Nt)
 @time evolve!(Ib, q, block)
 
 # Convolution
-C1 = @time convolve_step(q[1, :], setup; params=constants)
-C2 = @time convolve_step(q[1, :], setup; params=constants)
-C_sr = @time convolve_step(q[1, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
-C_sr_2 = @time convolve_step(q[1, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
+C_int_1 = @time convolve_step(q[1, :], setup; params=constants)
+C_int_2 = @time convolve_step(q[2, :], setup; params=constants)
+C_sr_1 = @time convolve_step(q[1, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
+C_sr_2 = @time convolve_step(q[2, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
 
-C = C1 + C_sr
+C1 = C_int_2 + C_sr_1
+C2 = C_int_1 + C_sr_2
+
 # Error
-err = @. abs(Ib[1, :] - C_sr - C2)
-err = @. abs(Ib[2, :] - C_sr_2 - C1)
+err = @. abs(Ib[1, :] - C1)
+err = @. abs(Ib[2, :] - C2)
 
 
 maximum(err)
