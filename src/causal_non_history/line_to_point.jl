@@ -169,17 +169,33 @@ function get_representative_ltp(sources)
     return setup, min_dist
 end
 
+#=
 function I_L2P(h, N, setup, constants, ϵ)
     @unpack α, kg, Δt = constants
     @unpack σ, D, H, z = setup
     if N <= 0 return 0. end
-    if D <= z <= D+H
-        return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(2 * erf(s*h) + erf(s*(z-D-H)) - erf(s*(z-D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
-    elseif z < D
-        return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D-h)) - erf(s*(z-D-H))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
-    else 
-        return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D-H+h)) - erf(s*(z-D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
+    @show h, abs(z-D), abs(z-D-H)
+    if abs(z-D) > h || abs(z-D-H) > h
+        error = -1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * ( erf(s*(z+D+H)) - erf(s*(z+D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
+        if D <= z <= D+H
+            error += 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(2 * erf(s*h) + erf(s*(z-D-H)) - erf(s*(z-D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
+        elseif z < D
+            error += 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D-h)) - erf(s*(z-D-H))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
+        else 
+            error += 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D-H+h)) - erf(s*(z-D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
+        end
+        return error
+    else
+        return -1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z+D+H+h)) - erf(s*(z+D))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
     end
+end
+=#
+
+function I_L2P(h, N, setup, constants, ϵ)
+    @unpack α, kg, Δt = constants
+    @unpack σ, D, H, z = setup
+    if N <= 0 return 0. end
+    return 1 / (4π * kg) * quadgk(s -> exp(-σ^2*s^2) / s * abs(erf(s*(z-D)) - erf(s*(z-D-H)) - erf(s*(z+D+H)) + erf(s*(z+D))- ( erf(s*(z-max(z-h, D))) - erf(s*(z-min(z+h, D+H))) - erf(s*(z-max(min(z-h, -D), -D-H))) + erf(s*(z+D)))), 1/sqrt(4*α*Δt*N), Inf, atol=ϵ)[1]
 end
 
 function compute_N_for_line_range(h, setup, constants, ϵ, Nt, Ndef, Q)
@@ -211,7 +227,9 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants, Q)
     while true
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
-        if (D <= z <= D+H && h < H/2) || h < H 
+        @show d, h
+        if h < (2H+2D)
+        #if (D <= z <= D+H && h < H/2) || h < H 
             Nd = compute_N(d, ϵ, constants, Q)
             if I_L2P(h, Nt, setup, constants, ϵ) < ϵ/Q
                 break
@@ -228,7 +246,7 @@ function choose_blocks(::SegmentToPoint, sources, Nt, ϵ, constants, Q)
     end
     if N[end] < Nt
         push!(N, Nt)
-        edge = max(abs(z-D), abs(z-D-H))
+        edge = max(abs(z+D+H), abs(z-D-H))
         local maxh
         try
             maxh = find_zero(h -> I_L2P(h, Nt, setup, constants, ϵ) - ϵ/Q, min(ND[end], edge))
@@ -275,9 +293,16 @@ function compute_H!(HM, ::SegmentToPoint; ζ, W, expt, sources, distances, const
             D_eval = max(source.D, z_eval - h)
             H_eval = min(source.D + source.H, z_eval + h) - D_eval
         end
+
+        H_eval_image = min(max(0., h - z_eval - source.D), source.H)
+        D_eval_image = - source.D - H_eval_image
+
         setup = SegmentToPoint(D=D_eval, H=H_eval, z=z_eval, σ=σ)
+        setup_image = SegmentToPoint(D=D_eval_image, H=H_eval_image, z=z_eval, σ=σ)
+        #@show setup, setup_image
         lineparams = LineIntegralParams(setup, ζζ/rb, ϵ)
-        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * compute_line_integral(lineparams; containers=containers)
+        lineparams_image = LineIntegralParams(setup_image, ζζ/rb, ϵ)
+        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * (compute_line_integral(lineparams; containers=containers) - compute_line_integral(lineparams_image; containers=containers))
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end
