@@ -104,6 +104,7 @@ function compute_line_integral(params::LineIntegralParams; containers)
 end
 
 self_setup(::SegmentToPoint, source) = SegmentToPoint(D=source.D, H=source.H, z=source.D+source.H/2, σ=source.rb)
+image(s::SegmentToPoint) = SegmentToPoint(D=-s.D-s.H, H=s.H, σ=s.σ, z=s.z)
 
 function constant_integral(setup::SegmentToPoint, constants::Constants, N) 
     @unpack D, H, z, σ = setup
@@ -111,6 +112,30 @@ function constant_integral(setup::SegmentToPoint, constants::Constants, N)
     rb = σ
     r(zp) = sqrt(rb^2 + (zp - z)^2)
     quadgk(zp -> erf(r(zp)/rb/sqrt(4*N*Δt̃)) / r(zp), D, D+H)[1] / (4π * kg)
+end
+
+function self_response_disc(ϵ, N, setup, params::Constants, containers)
+    @unpack D, H, z, σ = setup
+    @unpack Δt̃, kg, rb = params
+
+    v(ζ) = FiniteLineSource.compute_line_integral(FiniteLineSource.LineIntegralParams(setup, ζ/rb, ϵ); containers=containers)
+    guide(ζ) = v(ζ) * (1 + exp(-ζ^2*Δt̃*N)) * (1 - exp(-ζ^2*Δt̃)) / ζ
+    n = 10
+    _, _, segbuf = quadgk_segbuf(guide, 0., 10., order=n)
+    sort!(segbuf, by=x->x.a)
+
+    ζ = zeros(0)
+    W = zeros(0)
+    build_nodes_and_weights!(ζ, W, segbuf, n)
+
+    F = zeros(length(ζ))
+    expt = @. exp(-ζ^2 * Δt̃)
+    exptout = @. exp(-ζ^2 * N * Δt̃)
+    r(zp) = sqrt(rb^2 + (zp - z)^2)
+    Ic = log((z-D + r(D))/(z-D-H + r(D+H))) /  (4π * kg)
+    Icout = quadgk(zp -> erf(r(zp)/rb/sqrt(4*N*Δt̃)) / r(zp), D, D+H)[1] / (4π * kg)
+
+    ζ, W, F, expt, exptout, Ic, Icout
 end
 
 function bakhalov_discretization(ϵ, N, setup, params::Constants)
@@ -208,9 +233,10 @@ end
 
 function choose_blocks(setup::SegmentToPoint, sources, Nt, ϵ, constants, Q)
     @unpack kg, α, Δt, Δt̃, rb = constants
+    @unpack σ, D, H, z, image_strength = setup
+
     ratio = 3.
-    setup, min_dist = get_representative_ltp(sources, setup.image_strength)
-    @unpack σ, D, H, z = setup
+    setup, min_dist = get_representative_ltp(sources, image_strength)
 
     Nmin = compute_N(min_dist, ϵ, constants, Nt, Q)
     N = [compute_N_for_line_range(0., setup, constants, ϵ, Nt, Nmin, Q)]
@@ -227,9 +253,7 @@ function choose_blocks(setup::SegmentToPoint, sources, Nt, ϵ, constants, Q)
     while true
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
-        @show d, h
-        if h < (z+D+H)
-        #if (D <= z <= D+H && h < H/2) || h < H 
+        if image_strength == 0 && h < max(z-D, z-D-H) || image_strength != 0 && h < (z+D+H)
             Nd = compute_N(d, ϵ, constants, Q)
             if I_L2P(h, Nt, setup, constants, ϵ) < ϵ/Q
                 break
@@ -281,6 +305,8 @@ function compute_H!(HM, setup::SegmentToPoint; ζ, W, expt, sources, distances, 
         target = sources[i]
         block = findfirst(range -> k in range, ranges)
         z_eval = target.D + target.H/2
+
+        if σ > ND[block+1] continue end
         if z_eval < source.D  
             h = sqrt(ND[block+1]^2 - σ^2) - (source.D - z_eval)
             D_eval = source.D
@@ -299,11 +325,17 @@ function compute_H!(HM, setup::SegmentToPoint; ζ, W, expt, sources, distances, 
         D_eval_image = - source.D - H_eval_image
 
         setup = SegmentToPoint(D=D_eval, H=H_eval, z=z_eval, σ=σ)
-        setup_image = SegmentToPoint(D=D_eval_image, H=H_eval_image, z=z_eval, σ=σ)
-        #@show setup, setup_image
         lineparams = LineIntegralParams(setup, ζζ/rb, ϵ)
-        lineparams_image = LineIntegralParams(setup_image, ζζ/rb, ϵ)
-        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * (compute_line_integral(lineparams; containers=containers) + image_strength * compute_line_integral(lineparams_image; containers=containers))
+
+        interaction = compute_line_integral(lineparams; containers=containers)
+
+        if image_strength != 0.
+            setup_image = SegmentToPoint(D=D_eval_image, H=H_eval_image, z=z_eval, σ=σ)
+            lineparams_image = LineIntegralParams(setup_image, ζζ/rb, ϵ)
+            interaction += image_strength * compute_line_integral(lineparams_image; containers=containers)
+        end
+
+        @inbounds HM[k, i, j] = C * W[k] * (1 - expt[k]) / ζ[k] * interaction
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end

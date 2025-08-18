@@ -7,19 +7,20 @@ struct SegmentToSegment{T <: Number} <: Setup
     D2::T
     H2::T
     σ::T
+    image_strength::T
 end
-function SegmentToSegment(;D1, H1, D2, H2, σ)
+function SegmentToSegment(;D1, H1, D2, H2, σ, image_strength = 0.)
     lowest = min(min(D1, D1+H1), min(D2, D2+H2))
     if lowest < 0
         lowest = abs(lowest)
         nD1, nH1 = min(D1+lowest, D1+H1+lowest), max(D1+lowest, D1+H1+lowest) - min(D1+lowest, D1+H1+lowest)
         nD2, nH2 = min(D2+lowest, D2+H2+lowest), max(D2+lowest, D2+H2+lowest) - min(D2+lowest, D2+H2+lowest)
-        SegmentToSegment(nD1, nH1, nD2, nH2, σ)
+        SegmentToSegment(nD1, nH1, nD2, nH2, σ, image_strength)
     else 
-        return SegmentToSegment(D1, H1, D2, H2, σ)
+        return SegmentToSegment(D1, H1, D2, H2, σ, image_strength)
     end
 end
-transpose(p::SegmentToSegment) = SegmentToSegment(D1=p.D2, H1=p.H2, D2=p.D1, H2=p.H1, σ=p.σ)
+transpose(p::SegmentToSegment) = SegmentToSegment(D1=p.D2, H1=p.H2, D2=p.D1, H2=p.H1, σ=p.σ, image_strength=p.image_strength)
 
 struct STSComputationContainers{T <: Number} <: ComputationContainers
     J::Matrix{T}

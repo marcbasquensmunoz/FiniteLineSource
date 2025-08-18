@@ -24,9 +24,9 @@ function LineToLineIntegralParams(setup::SegmentToSegment, ω, ϵ, h=nothing)
     r3 = H2 > H1 ? (D2 + H2 > D1 + H1 ? rUR : σ) : (D2 > D1 ? rLL : σ)
     r4 = D2 + H2 > D1 ? rUL : σ
 
-    α1 = D1 - D2 + H1
+    α1 = abs(D1 - D2 + H1)
     α2 = min(H1, H2)
-    α3 = D2 - D1 + H2
+    α3 = abs(D2 - D1 + H2)
 
     d = isnothing(h) ? Inf : sqrt(σ^2 + h^2)
     LineToLineIntegralParams(r1=min(r1, d), r2=min(r2, d), r3=min(r3, d), r4=min(r4, d), α1=α1, α2=α2, α3=α3, ω=ω, σ=σ, ϵ=ϵ)
@@ -47,30 +47,31 @@ function constant_integral(setup::SegmentToSegment, constants::Constants, N)
     quadgk(z1 -> quadgk(z2 -> erf(r(z1, z2)/rb/sqrt(4*N*Δt̃)) / r(z1, z2), D2, D2+H2)[1], D1, D1+H1)[1] / (4π * kg * H2)
 end
 
-self_setup(::SegmentToSegment, source) = SegmentToSegment(D1=source.D, H1=source.H, D2=source.D, H2=source.H, σ=source.rb)
+self_setup(::SegmentToSegment, source) = SegmentToSegmentOld(D1=source.D, H1=source.H, D2=source.D, H2=source.H, σ=source.rb)
+image(s::SegmentToSegmentOld) = SegmentToSegmentOld(D1=-s.D1-s.H1, H1=s.H1, D2=s.D2, H2=s.H2, σ=s.σ)
 
-function get_representative_ltl(sources)
+function get_representative_ltl(sources, image_strength)
     min_dist = Inf
     setup = SegmentToSegment(D1=0., H1=0., D2=0., H2=0., σ=0.)
     for (i, s) in enumerate(sources)
         for t in @views sources[1:i-1]
-            if s.strength <= 0. || t.strength <= 0. continue end
             dist = minimum_distance(s, t)
             if dist < min_dist
                 min_dist = dist
-                setup = SegmentToSegment(D1=s.D, H1=s.H, D2=t.D, H2=t.H, σ=compute_distance_2D(s, t))
+                setup = SegmentToSegment(D1=s.D, H1=s.H, D2=t.D, H2=t.H, σ=compute_distance_2D(s, t), image_strength = image_strength)
             end
         end
     end
     return setup, min_dist
 end
 
+Θ(x) = x >= 0 ? 1. : 0.
 int_exp_ierf(x, L, σ) = x/2 * gamma(0, σ^2*L^2) - exp(-σ^2*L^2) / L / sqrt(π) + σ*erfc(σ*L) + exp(-(σ^2+x^2)*L^2) / L / sqrt(π) - sqrt(σ^2+x^2)*erfc(sqrt(σ^2+x^2)*L) 
 
 function I_L2L(h, N, setup, constants, ϵ)
     if N <= 0 return 0. end
     @unpack α, kg, Δt = constants
-    @unpack D1, H1, D2, H2, σ = setup
+    @unpack D1, H1, D2, H2, σ, image_strength = setup
     P = min(H2, D2 + H2 - D1 - h) + min(H2, D1 + H1 - D2 - h)
     M1 = min(D2 + H2 - D1, h)
     M2 = min(D1 + H1 - D2, h)
@@ -98,8 +99,25 @@ function I_L2L(h, N, setup, constants, ϵ)
         IA += int_exp_ierf(A2, 1/sqrt(4α*Δt*N), σ) 
     end    
 
-    integrand(s) = exp(-σ^2 * s^2) / s * ((ierf(s * M1) + ierf(s * M2) - fA(s)) / s + erf(s * h) * P)      
-    return 1 / (4π*kg * H2) * abs(quadgk(integrand, 1/sqrt(4α*Δt*N), Inf, atol=ϵ)[1] - IA)
+    integrand(s) = exp(-σ^2 * s^2) / s * ((ierf(s * M1) + ierf(s * M2) - fA(s)) / s + erf(s * h) * P)    
+    real = quadgk(integrand, 1/sqrt(4α*Δt*N), Inf, atol=ϵ)[1]
+
+    error = real - IA
+
+    # Image
+    if image_strength != 0.
+        I_h_image(s) = (
+            1/s * (max(h-D1-H1, min(D2+H2, h-D1)) - max(h-D1-H1, min(D2, h-D1))) * erf(s*h)
+            + 1/s^2 * ( ierf(s*(min(h-D1-H1+D2+H2, 2*(D2+H2)))) - ierf(s*(min(h-D1-H1+D2+H2, 2D2+H2))) )
+            + 1/s^2 * ( ierf(s*(min(D2+D1, h))) - ierf(s*(min(D2+H2+D1, h))) )
+        )
+        I_full_image(s) = (ierf(s*(D2+H2+D1+H1)) + ierf(s*(D1+D2)) - ierf(s*(D2+H2+D1)) - ierf(s*(D2+D1+H1))) / s^2
+
+        image_error = quadgk(s -> exp(-s^2*σ^2) * (I_full_image(s)-I_h_image(s)), 1/sqrt(4α*Δt*N), Inf, atol=ϵ)[1]
+        error += image_strength * image_error
+    end
+    
+    return 1 / (4π*kg * H2) * abs(error)
 end
 
 function compute_N_for_line_to_line_range(h, setup, constants, ϵ, Nt, Ndef, Q)
@@ -110,15 +128,15 @@ function compute_N_for_line_to_line_range(h, setup, constants, ϵ, Nt, Ndef, Q)
     end
 end
 
-function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
+function choose_blocks(setup::SegmentToSegment, sources, Nt, ϵ, constants, Q)
     if length(sources) == 1
         return [Nt], [sources[1].rb * 100]
     end
     @unpack kg, α, Δt, Δt̃ = constants
+    @unpack D1, H1, D2, H2, σ, image_strength = setup
 
     ratio = 3.
-    setup, min_dist = get_representative_ltl(sources)
-    @unpack D1, H1, D2, H2, σ = setup
+    setup, min_dist = get_representative_ltl(sources, image_strength)
 
     Nmin = compute_N(min_dist, ϵ, constants, Nt, Q)
 
@@ -140,7 +158,7 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
     while true
         d = sqrt(σ^2 + offset^2) * ratio^i
         h = sqrt(d^2 - σ^2) - offset
-        if h < H2
+        if h < H1+H2
             if I_L2L(h, Nt, setup, constants, ϵ) < ϵ/Q
                 break
             end
@@ -168,6 +186,7 @@ function choose_blocks(::SegmentToSegment, sources, Nt, ϵ, constants, Q)
         end
         push!(ND, sqrt(σ^2 + min(edge^2, maxh^2)))
     end
+    
     zero_indices = findall(==(0), N)
     deleteat!(N, zero_indices)
     deleteat!(ND, zero_indices)
@@ -195,6 +214,7 @@ function compute_double_line_integral_part(params::LineToLineIntegralParams; con
         t -> sin(ω * σ * cosh(t))
     end
 
+    #@show r1, r2, r3, r4
     if r3 != r4 
         I3 = 0.
         if r1 == r3
@@ -299,8 +319,10 @@ function compute_ζ_discretization!(ζ, W, indices, ::SegmentToSegment; sources,
     end
 end
 
-function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
+function compute_H!(HM, setup::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
     @unpack kg = constants
+    @unpack image_strength = setup
+
     C = 1 / (2π^2*kg)
     for j in eachindex(sources), i in 1:j, (k, ζζ) in enumerate(ζ)
         rb = sources[j].rb
@@ -308,12 +330,28 @@ function compute_H!(HM, ::SegmentToSegment; ζ, W, expt, sources, distances, con
         source = sources[j]
         target = sources[i]
         block = findfirst(range -> k in range, ranges)
+        
+        if σ > ND[block+1] continue end
         h = sqrt(ND[block+1]^2 - σ^2)
+
         setup = SegmentToSegment(D1=source.D, H1=source.H, D2=target.D, H2=target.H, σ=σ)
+
         lineparams = FiniteLineSource.LineToLineIntegralParams(setup, ζζ/rb, ϵ, h)
         lineparamsT = FiniteLineSource.LineToLineIntegralParams(transpose(setup), ζζ/rb, ϵ, h)
 
-        @inbounds HM[k, i, j] = source.strength * C / target.H * W[k] * (1 - expt[k]) / ζ[k] * compute_double_line_integral(lineparams, lineparamsT; containers=containers)
+        interaction = compute_double_line_integral(lineparams, lineparamsT; containers=containers) 
+
+        if image_strength != 0.
+            setup_image = SegmentToSegment(D1=-source.D-source.H, H1=source.H, D2=target.D, H2=target.H, σ=σ)
+
+            lineparams_image = FiniteLineSource.LineToLineIntegralParams(setup_image, ζζ/rb, ϵ, h)
+            lineparamsT_image = FiniteLineSource.LineToLineIntegralParams(transpose(setup_image), ζζ/rb, ϵ, h)
+
+            image_interaction = compute_double_line_integral(lineparams_image, lineparamsT_image; containers=containers)
+            interaction += image_strength * image_interaction
+        end
+
+        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * interaction
         @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end

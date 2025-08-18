@@ -13,14 +13,8 @@ struct BlockMethod{T <: Number}
     K_min::Matrix{Int}
     qaux::Vector{T}
     N::Vector{Int}
-    sr_ζ::Vector{Vector{T}}
-    sr_w::Vector{Vector{T}}
-    sr_F::Vector{Vector{T}}
-    sr_expt::Vector{Vector{T}}
-    sr_expNout::Vector{Vector{T}}
-    sr_Ic::Vector{T}
-    sr_Icout::Vector{T}
-    compute_self_response::Bool
+    g::Vector{Vector{T}}
+    compute_first_block::Bool
 end
 
 @with_kw struct PointSource{T <: Number} @deftype T
@@ -35,10 +29,9 @@ end
     D
     H
     rb = 0.1
-    strength = 1.
 end
 
-function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q=1., compute_self_response=true)
+function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants, containers=nothing; Q=1., compute_first_block=true)
     @unpack Δt, α, rb, kg, Δt̃ = constants
 
     n = 10
@@ -83,28 +76,20 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
     @views ranges = [indices[i]+1:indices[i+1] for i in eachindex(indices[1:end-1])]
     @views Kranges = [index+1:indices[end] for index in indices[1:end-1]]
 
-    sr_ζ = Vector{Float64}[]
-    sr_w = Vector{Float64}[]
-    sr_F = Vector{Float64}[]
-    sr_expt = Vector{Float64}[]
-    sr_expNout = Vector{Float64}[]
-    sr_Ic = Float64[]
-    sr_Icout = Float64[]
-
-    if compute_self_response
+    g = Vector{Float64}[]
+    if compute_first_block 
+        first_block_times = Δt .* (1:N[1])
         for i in 1:Ns
             sr_setup = self_setup(setup, sources[i])
-            precomp = precompute_parameters(sr_setup, params=constants)
-            push!(sr_ζ, precomp.x)
-            push!(sr_w, precomp.w)
-            push!(sr_F, precomp.fx)
-            push!(sr_expt, @. exp(-precomp.x^2*Δt̃))
-            push!(sr_Ic, precomp.I_c)
-            push!(sr_expNout,  @. exp(-precomp.x^2 * N[1] * Δt̃))
-            push!(sr_Icout, constant_integral(sr_setup, constants, N[1]))
+            v = step_response.(first_block_times, Ref(sr_setup), Ref(constants); ϵ=ϵ´)
+            if setup.image_strength != 0.
+                sr_image_setup = image(sr_setup)
+                v += setup.image_strength .* step_response.(first_block_times, Ref(sr_image_setup), Ref(constants); ϵ=ϵ´)
+            end
+            push!(g, v)
         end
     end
-    
+
     # Preallocate objects
     F = zeros(length(ζ), Ns)
     expt = @. exp(-ζ^2*Δt̃)
@@ -147,20 +132,14 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         K_min, 
         qaux, 
         N,
-        sr_ζ,
-        sr_w,
-        sr_F,
-        sr_expt,
-        sr_expNout,
-        sr_Ic,
-        sr_Icout,
-        compute_self_response
+        g,
+        compute_first_block
     )
 end
 
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
-        ranges, Kranges, K_min, qaux, sr_ζ, sr_w, sr_F, sr_expt, sr_expNout, sr_Ic, sr_Icout, compute_self_response = block
+        ranges, Kranges, K_min, qaux, g, compute_first_block = block
 
     #if isempty(Kranges) return end
 
@@ -168,19 +147,11 @@ function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     Nt = size(q)[2]
     K = size(load_delays)[1]
     for nt in 1:Nt
-        current_q = map(x->x[1], block.load_buffer)
-        @views for (q, b) in zip(q[:, nt], block.load_buffer)
+        current_q = map(x->x[1], load_buffer)
+        @views for (q, b) in zip(q[:, nt], load_buffer)
             push!(b, q)
         end
 
-        if compute_self_response
-            for j in 1:Nb
-                @. sr_F[j] = sr_expt[j] * (sr_F[j] - q[j, nt] / sr_ζ[j] + sr_expNout[j] * current_q[j] / sr_ζ[j])
-                I[j, nt] += dot(sr_F[j], sr_w[j]) + q[j, nt] * sr_Ic[j] - current_q[j] * sr_Icout[j]
-                @. sr_F[j] = sr_F[j] + (q[j, nt] - sr_expNout[j] * current_q[j]) / sr_ζ[j]
-            end
-        end
-            
         for j in 1:Nb
             qaux .= 0.
             for i in 1:K
@@ -193,13 +164,41 @@ function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
             @views @. F[:, j] = expt * F[:, j] + qaux
         end
 
-        
+        if compute_first_block
+            for i in 1:Nb
+                Δq = diff([0; collect(load_buffer[i])])
+                @inbounds I[i, nt] += dot(Δq, reverse(g[i]))
+            end
+        end
+  
         for target in 1:Nb
             for source in 1:Nb
-                if !compute_self_response && source == target continue end
+                if !compute_first_block && source == target continue end
+                if K_min[source, target] == 0 || length(Kranges) < K_min[source, target] continue end
                 @inbounds range = Kranges[K_min[source, target]]
                 @inbounds @views I[target, nt] += dot(F[range, source], HM[range, target, source])
             end
         end
+    end
+end
+
+function build_nodes_and_weights!(ζ, W, segbuf, n)
+    n_seg = length(segbuf)
+
+    Nζ = n_seg*n
+    Hs = Int(floor(n/2))
+    p = n%2
+
+    append!(ζ, zeros(Nζ))
+    append!(W, zeros(Nζ))
+    x, _, w = QuadGK.cachedrule(Float64, n)
+
+    for (i, segment) in enumerate(segbuf)
+        m = (segment.b-segment.a)/2
+        c = (segment.b+segment.a)/2 
+        @inbounds @views @. ζ[end-(n_seg-i+1)*n+1:end-(n_seg-i)*n-Hs] = m * x[2:2:end-1+p] + c
+        @inbounds @views @. ζ[end-(n_seg-i+1)*n+1+Hs+p:end-(n_seg-i)*n] = -m * x[end-1-p:-2:2] + c
+        @inbounds @views @. W[end-(n_seg-i+1)*n+1:end-(n_seg-i)*n-Hs] = m * w
+        @inbounds @views @. W[end-(n_seg-i+1)*n+1+Hs+p:end-(n_seg-i)*n] = m * w[end-p:-1:1]
     end
 end
