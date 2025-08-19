@@ -116,7 +116,7 @@ function I_L2L(h, N, setup, constants, ϵ)
         image_error = quadgk(s -> exp(-s^2*σ^2) * (I_full_image(s)-I_h_image(s)), 1/sqrt(4α*Δt*N), Inf, atol=ϵ)[1]
         error += image_strength * image_error
     end
-    
+
     return 1 / (4π*kg * H2) * abs(error)
 end
 
@@ -319,39 +319,62 @@ function compute_ζ_discretization!(ζ, W, indices, ::SegmentToSegment; sources,
     end
 end
 
+function get_distinct_setups(sources)
+    setups = Dict{SegmentToSegment{typeof(sources[1].D)}, Vector{Tuple{Int, Int}}}()
+    for i in 1:length(sources)
+        for j in 1:i
+            source = sources[i]
+            target = sources[j]
+            σ = compute_distance_2D(source, target)
+            setup = SegmentToSegment(D1=0., H1=source.H, D2=target.D - source.D, H2=target.H, σ=σ)
+            if !haskey(setups, setup)
+                push!(setups, setup => [(i, j)])
+            else
+                push!(setups[setup], (i, j))
+            end
+        end
+    end
+    return setups
+end
+
+image(s::SegmentToSegment) = SegmentToSegment(D1=-s.D1-s.H1, H1=s.H1, D2=s.D2, H2=s.H2, σ=s.σ)
+
 function compute_H!(HM, setup::SegmentToSegment; ζ, W, expt, sources, distances, constants::Constants, ϵ, containers, ND, ranges)
     @unpack kg = constants
     @unpack image_strength = setup
 
+    distinct_setups = get_distinct_setups(sources)
+
     C = 1 / (2π^2*kg)
-    for j in eachindex(sources), i in 1:j, (k, ζζ) in enumerate(ζ)
-        rb = sources[j].rb
-        σ = i == j ? rb : distances[i, j]
-        source = sources[j]
-        target = sources[i]
-        block = findfirst(range -> k in range, ranges)
-        
-        if σ > ND[block+1] continue end
-        h = sqrt(ND[block+1]^2 - σ^2)
+    for (k, ζζ) in enumerate(ζ)
+        for (setup, pair) in distinct_setups
+            rb = sources[pair[1][1]].rb
+            σ = setup.σ
 
-        setup = SegmentToSegment(D1=source.D, H1=source.H, D2=target.D, H2=target.H, σ=σ)
+            block = findfirst(range -> k in range, ranges)
+            
+            if σ > ND[block+1] continue end
+            h = sqrt(ND[block+1]^2 - σ^2)
 
-        lineparams = FiniteLineSource.LineToLineIntegralParams(setup, ζζ/rb, ϵ, h)
-        lineparamsT = FiniteLineSource.LineToLineIntegralParams(transpose(setup), ζζ/rb, ϵ, h)
+            lineparams = FiniteLineSource.LineToLineIntegralParams(setup, ζζ/rb, ϵ, h)
+            lineparamsT = FiniteLineSource.LineToLineIntegralParams(transpose(setup), ζζ/rb, ϵ, h)
 
-        interaction = compute_double_line_integral(lineparams, lineparamsT; containers=containers) 
+            interaction = compute_double_line_integral(lineparams, lineparamsT; containers=containers) 
 
-        if image_strength != 0.
-            setup_image = SegmentToSegment(D1=-source.D-source.H, H1=source.H, D2=target.D, H2=target.H, σ=σ)
+            if image_strength != 0.
+                setup_image = image(setup)
 
-            lineparams_image = FiniteLineSource.LineToLineIntegralParams(setup_image, ζζ/rb, ϵ, h)
-            lineparamsT_image = FiniteLineSource.LineToLineIntegralParams(transpose(setup_image), ζζ/rb, ϵ, h)
+                lineparams_image = FiniteLineSource.LineToLineIntegralParams(setup_image, ζζ/rb, ϵ, h)
+                lineparamsT_image = FiniteLineSource.LineToLineIntegralParams(transpose(setup_image), ζζ/rb, ϵ, h)
 
-            image_interaction = compute_double_line_integral(lineparams_image, lineparamsT_image; containers=containers)
-            interaction += image_strength * image_interaction
+                image_interaction = compute_double_line_integral(lineparams_image, lineparamsT_image; containers=containers)
+                interaction += image_strength * image_interaction
+            end
+
+            for (i, j) in pair
+                @inbounds HM[k, i, j] = C / setup.H2 * W[k] * (1 - expt[k]) / ζ[k] * interaction
+                @inbounds HM[k, j, i] = HM[k, i, j]
+            end
         end
-
-        @inbounds HM[k, i, j] = C / target.H * W[k] * (1 - expt[k]) / ζ[k] * interaction
-        @inbounds HM[k, j, i] = HM[k, i, j]
     end
 end
