@@ -3,8 +3,8 @@ using FiniteLineSource: LineSource
 using BenchmarkTools
 
 
-ϵ = 1e-6
-Nt = 8760*20
+ϵ = 1e-8
+Nt = 100
 B = 1.
 
 D1 = 0.
@@ -14,13 +14,14 @@ H2 = 100.
 
 α = 1e-6
 kg = 3.
-rb = 0.0575
+rb = 0.1
 Δt = 3600.
-constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
+constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points = 7 .* [50, 50, 50], line_limits = [0., 0.3, 0.7, 1.])
+
 
 q = hcat(
-    [1. for t in 1:Nt],
-    [1. for t in 1:Nt]
+    [sin(t/8760) for t in 1:Nt],
+    [sin(t/8760) for t in 1:Nt]
 )'
 
 bh_positions = [LineSource(x=0., y=0., D=D1, H=H1, rb=rb), LineSource(x=B, y=0., D=D2, H=H2, rb=rb)]
@@ -29,19 +30,27 @@ bh_positions = [LineSource(x=0., y=0., D=D1, H=H1, rb=rb), LineSource(x=B, y=0.,
 # Error analysis
 #####################################
 
-setup = SegmentToSegment(D1=D1, H1=H1, D2=D2, H2=H2, σ=B)
+setup = SegmentToSegment(D1=D1, H1=H1, D2=D2, H2=H2, σ=B, image_strength = -1.)
+image_setup = SegmentToSegment(D1=-D1-H1, H1=H1, D2=D2, H2=H2, σ=B)
+sr_setup = SegmentToSegment(D1=D1, H1=H1, D2=D2, H2=H2, σ=rb)
+sr_image_setup = SegmentToSegment(D1=-D1-H1, H1=H1, D2=D2, H2=H2, σ=rb)
+
 # Block method
 containers = FiniteLineSource.AsymptoticContainers(10)
-block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q));
+block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q), compute_first_block=true);
 Ib = zeros(length(bh_positions), Nt)
 @time evolve!(Ib, q, block)
 
 # Convolution
-C_int = @time convolve_step(q[2,:], SegmentToSegmentOld(setup); params=constants, ϵ=ϵ/100)
-C_sr = @time convolve_step(q[1,:], SegmentToSegmentOld(D1=D1, H1=H1, D2=D2, H2=H2, σ=rb); params=constants, ϵ=ϵ/100)
-C = C_int + C_sr
+C_2to1 = @time convolve_step(q[2,:], SegmentToSegmentOld(setup); params=constants, ϵ=ϵ/100)
+C_2to1_image = @time convolve_step(-q[2,:], SegmentToSegmentOld(image_setup); params=constants, ϵ=ϵ/100)
+C_1sr = @time convolve_step(q[1,:], SegmentToSegmentOld(sr_setup); params=constants, ϵ=ϵ/100)
+C_1sr_image = @time convolve_step(-q[1,:], SegmentToSegmentOld(sr_image_setup); params=constants, ϵ=ϵ/100)
+
+C1 = C_2to1 + C_2to1_image + C_1sr + C_1sr_image
+
 # Error
-err = @. abs(Ib[1, :] - C)
+err = @. abs(Ib[1, :] - C1)
 
 maximum(err)
 
@@ -59,3 +68,7 @@ precomp = @btime precompute_parameters(SegmentToSegmentOld(setup), params=consta
 # Simulation 
 @btime evolve!(Ib, q, block)
 @btime compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=constants)
+
+setup = SegmentToSegment(D1=-D1-H1, H1=H1, D2=D2, H2=H2, σ=σ)
+lineparams = FiniteLineSource.LineToLineIntegralParams(setup, 1/rb, ϵ, h)
+

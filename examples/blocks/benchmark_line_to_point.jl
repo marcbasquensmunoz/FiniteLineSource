@@ -3,9 +3,9 @@ using FiniteLineSource: LineSource
 using BenchmarkTools
 using Parameters
 
-ϵ = 1e-4
+ϵ = 1e-8
 Δt = 3600.
-Nt = 8760*50
+Nt = 8760*20
 
 α = 1e-6
 kg = 3.
@@ -29,29 +29,27 @@ constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 # Error analysis
 #####################################
 
-setup = SegmentToPoint(D=Ds, H=Hs, z=Dt+Ht/2, σ=B, image_strength = 1.)
+setup = SegmentToPoint(D=Ds, H=Hs, z=Dt+Ht/2, σ=B, image_strength = -1.)
 image_setup = SegmentToPoint(D=-Ds-Hs, H=Hs, z=Dt+Ht/2, σ=B)
+sr_setup = SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb)
+sr_image_setup = SegmentToPoint(D=-Ds-Hs, H=Hs, z=Ds+Hs/2, σ=rb)
 
 # Block method
 containers = FiniteLineSource.AsymptoticContainers(10)
-block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q), compute_self_response=false);
+block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q), compute_self_response=true);
 Ib = zeros(length(bh_positions), Nt)
 @time evolve!(Ib, q, block)
 
 # Convolution
-#C_int_1 = @time convolve_step(q[1, :], setup; params=constants)
-C_int_2 = @time convolve_step(q[2, :], setup; params=constants)
-C_int_2_image = @time convolve_step(q[2, :], image_setup; params=constants)
-#C_sr_1 = @time convolve_step(q[1, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
-#C_sr_2 = @time convolve_step(q[2, :], SegmentToPoint(D=Ds, H=Hs, z=Ds+Hs/2, σ=rb); params=constants)
+C_2to1 = @time convolve_step(q[2, :], setup; params=constants)
+C_2to1_image = @time convolve_step(-q[2, :], image_setup; params=constants)
+C_1sr = @time convolve_step(q[1, :], sr_setup; params=constants)
+C_1sr_image = @time convolve_step(-q[1, :], sr_image_setup; params=constants)
 
-C1 = C_int_2 + C_int_2_image #+ C_sr_1
-#C2 = C_int_1 + C_sr_2
+C1 = C_2to1 + C_2to1_image + C_1sr + C_1sr_image
 
 # Error
 err = @. abs(Ib[1, :] - C1)
-#err = @. abs(Ib[2, :] - C2)
-
 
 maximum(err)
 
@@ -77,7 +75,3 @@ Inh = zeros(Nt)
 precomp = precompute_parameters(setup, params=constants);
 compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=constants)
 maximum(abs.(Inh-C))
-
-
-
-FiniteLineSource.compute_N_for_line_range(0., setup, constants, ϵ, Nt, 10000, 1.)
