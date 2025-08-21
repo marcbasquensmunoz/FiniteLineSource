@@ -1,6 +1,7 @@
 using Bessels: besselj
 @with_kw struct PointToPoint{T <: Number} <: Setup @deftype T
     r
+    image_strength = 0.
 end
 
 function precompute_coefficients(setup::PointToPoint; dp, params::Constants, containers::ComputationContainers)

@@ -1,5 +1,6 @@
 using FiniteLineSource
 using FiniteLineSource: PointSource
+using BenchmarkTools
 
 ϵ = 1e-6
 Δt = 3600.
