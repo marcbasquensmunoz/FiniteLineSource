@@ -36,7 +36,7 @@ sr_image_setup = SegmentToPoint(D=-Ds-Hs, H=Hs, z=Ds+Hs/2, σ=rb)
 
 # Block method
 containers = FiniteLineSource.AsymptoticContainers(10)
-block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q), compute_self_response=true);
+block = @time prepare_containers(setup, bh_positions, ϵ/length(bh_positions), Nt, constants, containers, Q=maximum(q), compute_first_block=true);
 Ib = zeros(length(bh_positions), Nt)
 @time evolve!(Ib, q, block)
 

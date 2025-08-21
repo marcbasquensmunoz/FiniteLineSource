@@ -25,7 +25,7 @@ positions = [PointSource(0., 0., 0., rb), PointSource(B, 0., 0., rb)]
 setup = PointToPoint(r = B)
 
 # Block method
-block = prepare_containers(setup, positions, ϵ, Nt, constants, compute_self_response=false);
+block = prepare_containers(setup, positions, ϵ, Nt, constants, compute_first_block=false);
 Ib = zeros(length(positions), Nt)
 evolve!(Ib, q, block)
 
