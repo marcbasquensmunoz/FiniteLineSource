@@ -32,7 +32,7 @@ Roots = "2.2"
 SpecialFunctions = "2.5"
 StaticArrays = "1.9"
 Aqua = "0.8"
-Test = "1.11"
+Test = "1"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
