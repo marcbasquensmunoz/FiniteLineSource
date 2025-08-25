@@ -20,7 +20,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [compat]
 julia = "1.10" 
 Bessels = "0.2"
-DSP = "0.8"
+DSP = "0.5 - 0.8"
 DataStructures = "0.19"
 FastGaussQuadrature = "1.0"
 LegendrePolynomials = "0.4"
