@@ -16,7 +16,7 @@ jobs:
         run: |
           julia --project=benchmark -e '
             using Pkg;
-            Pkg.develop(path = "../");
+            Pkg.develop(path = "../FiniteLineSource");
             Pkg.add(name="PkgBenchmark");
             Pkg.add(name="BenchmarkCI", version="0.1.9");
             Pkg.instantiate();
