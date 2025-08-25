@@ -1,5 +1,4 @@
 using BenchmarkTools
-using Parameters
 using FiniteLineSource
 using FiniteLineSource: PointSource, LineSource
 
@@ -32,12 +31,11 @@ function compute_integral_throught_history(q, setup, constants, ϵ)
     compute_integral_throught_history!(setup, I=I, q=q, precomp=precomp, params=constants)
 end
 
-function compute_convolution(q, setup, constants, ϵ)
+function compute_convolution(q, setup, constants, ϵ)    
     convolve_step(q, setup, params=constants, ϵ=ϵ)
 end
 
 function blocks_implementation(q, setup, constants, ϵ, positions, containers) 
-    @unpack rb = constants
     Nt = length(q)
     block = prepare_containers(setup, positions, ϵ, Nt, constants, containers, compute_first_block=false);
     Ib = zeros(length(positions), Nt)

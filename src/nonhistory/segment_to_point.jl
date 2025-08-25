@@ -16,7 +16,7 @@ function initialize_containers(::SegmentToPoint, dps)
     N = map(dp -> dp.n, dps)
     unique_n = unique(N)
     map_n = [findfirst(x -> x==n, unique_n) for n in N]
-    (map_n, map(n -> STPComputationContainers{Float64}(nothing), unique_n))
+    (map_n, map(n -> STPComputationContainers(nothing), unique_n))
 end
 
 function initialize_buffer(setup::SegmentToPoint, rb)

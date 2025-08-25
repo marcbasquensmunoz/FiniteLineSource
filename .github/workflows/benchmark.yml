@@ -15,7 +15,7 @@ jobs:
       - name: Instantiate and resolve dependencies
         run: julia --project=FiniteLineSource -e 'using Pkg; Pkg.instantiate(); Pkg.resolve(); Pkg.precompile()'
       - name: Install dependencies
-        run: julia -e 'using Pkg; pkg"add PkgBenchmark BenchmarkCI@0.1.9 Parameters"'
+        run: julia -e 'using Pkg; pkg"add PkgBenchmark BenchmarkCI@0.1.9"'
       - name: Run benchmarks
         run: julia -e 'using BenchmarkCI; BenchmarkCI.judge()'
       - name: Post results
