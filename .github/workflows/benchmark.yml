@@ -13,9 +13,9 @@ jobs:
           version: '1.10'
       - uses: julia-actions/julia-buildpkg@latest
       - name: Install dependencies
-        run: julia -e 'using Pkg; pkg"add PkgBenchmark BenchmarkCI@0.1.9 Plots"'
-      - name: Instantiate
-        run: julia -e 'using Pkg; pkg"resolve; instantiate"'
+        run: julia -e 'using Pkg; pkg"add PkgBenchmark BenchmarkCI@0.1.9 Parameters"'
+      - name: Instantiate and resolve dependencies
+        run: julia -e 'using Pkg; Pkg.instantiate(); Pkg.resolve(); Pkg.precompile()'
       - name: Run benchmarks
         run: julia -e 'using BenchmarkCI; BenchmarkCI.judge()'
       - name: Post results
