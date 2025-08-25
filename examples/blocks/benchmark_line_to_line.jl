@@ -3,8 +3,8 @@ using FiniteLineSource: LineSource
 using BenchmarkTools
 
 
-ϵ = 1e-8
-Nt = 100
+ϵ = 1e-6
+Nt = 8760*20
 B = 1.
 
 D1 = 0.
@@ -16,7 +16,7 @@ H2 = 100.
 kg = 3.
 rb = 0.1
 Δt = 3600.
-constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points = 7 .* [50, 50, 50], line_limits = [0., 0.3, 0.7, 1.])
+constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 
 
 q = hcat(
@@ -51,24 +51,4 @@ C1 = C_2to1 + C_2to1_image + C_1sr + C_1sr_image
 
 # Error
 err = @. abs(Ib[1, :] - C1)
-
 maximum(err)
-
-
-#######################################
-# Performance analysis with non-history
-#######################################
-Inh = zeros(Nt)
-constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb, line_points=[50, 50], line_limits=[0., 0.5, 1.])
-
-# Precomputation
-block = @btime prepare_containers(setup, bh_positions, ϵ, Nt, constants, containers);
-precomp = @btime precompute_parameters(SegmentToSegmentOld(setup), params=constants, ϵ=ϵ);
-
-# Simulation 
-@btime evolve!(Ib, q, block)
-@btime compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=constants)
-
-setup = SegmentToSegment(D1=-D1-H1, H1=H1, D2=D2, H2=H2, σ=σ)
-lineparams = FiniteLineSource.LineToLineIntegralParams(setup, 1/rb, ϵ, h)
-

@@ -3,7 +3,7 @@ using FiniteLineSource: LineSource
 using BenchmarkTools
 using Parameters
 
-ϵ = 1e-8
+ϵ = 1e-6
 Δt = 3600.
 Nt = 8760*20
 
@@ -50,28 +50,4 @@ C1 = C_2to1 + C_2to1_image + C_1sr + C_1sr_image
 
 # Error
 err = @. abs(Ib[1, :] - C1)
-
 maximum(err)
-
-
-#######################################
-# Performance analysis with non-history
-#######################################
-Inh = zeros(Nt)
-
-# Precomputation
-block = @btime prepare_containers(setup, bh_positions, ϵ, Nt, constants, containers);
-precomp = @btime precompute_parameters(setup, params=constants, ϵ=ϵ);
-
-# Simulation 
-@btime evolve!(Ib, q, block)
-@btime compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=constants)
-
-
-#######################################
-# Non-history error analysis
-#######################################
-Inh = zeros(Nt)
-precomp = precompute_parameters(setup, params=constants);
-compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=constants)
-maximum(abs.(Inh-C))
