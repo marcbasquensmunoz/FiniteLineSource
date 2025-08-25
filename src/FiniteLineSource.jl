@@ -1,7 +1,7 @@
 module FiniteLineSource
 
 export point_step_response
-export precompute_parameters, fevolve_through_history!, compute_integral_and_advance_one_step!, compute_integral_throught_history!
+export precompute_parameters, compute_integral_throught_history!
 
 using Parameters
 using QuadGK
@@ -28,18 +28,16 @@ include("nonhistory/moving_segment_to_segment.jl")
 include("convolution.jl")
 export PointToPoint, SegmentToPoint, SegmentToSegment, SegmentToSegmentOld, MovingPointToPoint, MovingSegmentToPoint, MovingSegmentToSegment
 export convolve_step, step_response
-export Constants, Preallocation
+export Constants
 export precompute_parameters, compute_integral_throught_history!
 
 include("approximations/mean_sts.jl")
 include("approximations/point.jl")
 include("approximations/mean_internal.jl")
-export mean_sts_evaluation, midpoint_evaluation, mean_internal_evaluation
 export MeanSegToSegEvParams, PointEvalParams, InternalSegToSegEvParams
 
 include("integration.jl")
 export integrate
-export IntegrationSegment
 
 include("self_response.jl")
 export compute_self_response
@@ -53,10 +51,5 @@ include("causal_non_history/distance.jl")
 include("causal_non_history/point_to_point.jl")
 include("causal_non_history/line_to_point.jl")
 include("causal_non_history/line_to_line.jl")
-export choose_blocks, AsymptoticContainers
-export compute_ζ_points!, compute_N
-export compute_ζ_points_line!, compute_N_line
-export LineKernelParams, compute_kernel_line, LineKernelContainers
-export LineToLineKernelParams, compute_kernel_double_line
-export evolve!, prepare_containers
+export AsymptoticContainers, evolve!, prepare_containers
 end

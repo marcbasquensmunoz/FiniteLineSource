@@ -8,9 +8,9 @@
 end
 
 struct STPComputationContainers{T <: Number} <: ComputationContainers
-    segment_buffer::Union{Vector{QuadGK.Segment{T, T, T}}, Nothing}
+    segment_buffer::Vector{QuadGK.Segment{T, T, T}}
 end
-STPComputationContainers(::Nothing) = STPComputationContainers(nothing)
+STPComputationContainers(::Nothing) = STPComputationContainers{Float64}([])
 
 function initialize_containers(::SegmentToPoint, dps)
     N = map(dp -> dp.n, dps)
