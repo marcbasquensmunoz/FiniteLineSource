@@ -16,6 +16,7 @@ struct BlockMethod{T <: Number}
     N::Vector{Int}
     g::Vector{Vector{T}}
     compute_first_block::Bool
+    rb::T
 end
 
 @with_kw struct PointSource{T <: Number} @deftype T
@@ -68,6 +69,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         end
         K_min[j, j] = 1
     end
+    K_min .= 2
    
     ζ = zeros(0)
     W = zeros(0)
@@ -137,7 +139,8 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         qaux, 
         N,
         g,
-        compute_first_block
+        compute_first_block,
+        rb
     )
 end
 
@@ -167,30 +170,24 @@ function evolve_F!(q,start,stop, block::BlockMethod{T}) where {T <: Number}
             end
             @views @. F[:, j] = expt * F[:, j] + qaux
         end
-
-        if compute_first_block
-            for i in 1:Nb
-                Δq = diff([0; collect(load_buffer[i])])
-                @inbounds I[i, nt] += dot(Δq, reverse(g[i]))
-            end
-        end
     end
 end
 
-function fmm_evaluation!(res,sources,targets,block::BlockMethod{T}) where {T <: Number}
+function fmm_evaluation!(res,sources,block::BlockMethod{T}; ffmeps = 1e-12) where {T <: Number}
         @unpack ζ, p, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
-        ranges, Kranges, K_min, qaux, g, compute_first_block = block
+        ranges, Kranges, K_min, qaux, g, compute_first_block, rb = block
 
+        @show ffmeps
         # nζ,nt = length(ζ),length(targets)
     
         nζ = length(ζ)
 
         # targets = hcat([[p.x,p.y,p.z] for p in  positions]...)
-        for k in 1:nζ
-            zk = complex(block.ζ[k])
+        for k in Kranges[end-2]#1:nζ
+            zk = complex(block.ζ[k]/rb)
             charges = complex(block.F[k,:]) * p[k]
-            vals = hfmm3d(1e-12,zk,sources,charges=charges,targets = targets, pg=1)
-            @. res += imag(vals.pot)
+            vals = hfmm3d(ffmeps,zk,sources,charges=charges, pg=1)
+            @. res += imag(vals.pot) 
         end
         
 end
