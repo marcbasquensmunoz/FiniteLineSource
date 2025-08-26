@@ -27,3 +27,5 @@ end
     conv = convolve_step(q, Δt = 0.36, r = 1)
     @test conv[length(q)] ≈ 0.0007359029638686509 atol = ϵ
 end
+
+include("../benchmark/benchmarks.jl")
