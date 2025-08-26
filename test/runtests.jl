@@ -4,7 +4,8 @@ using Test
 using SpecialFunctions
 
 include("Aqua.jl")
-const ϵ = 5*10^-14
+
+ϵ = 5*10^-14
 
 @testset "point_step_response" begin
     @test point_step_response(3600, 1, 10^-6, 3)       ≈ 0                     atol = ϵ
@@ -27,3 +28,5 @@ end
     conv = convolve_step(q, Δt = 0.36, r = 1)
     @test conv[length(q)] ≈ 0.0007359029638686509 atol = ϵ
 end
+
+include("../benchmark/benchmarks.jl")
