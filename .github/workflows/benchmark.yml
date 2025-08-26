@@ -16,9 +16,9 @@ jobs:
         run: |
           julia --project=benchmark -e 'using Pkg; Pkg.develop(path = "../FiniteLineSource"); Pkg.add(name="PkgBenchmark"); Pkg.add(name="BenchmarkCI", version="0.1.9"); Pkg.instantiate(); Pkg.resolve(); Pkg.precompile();'
       - name: Run benchmarks
-        run: julia -e 'using BenchmarkCI; BenchmarkCI.judge()'
+        run: julia --project=benchmark -e 'using BenchmarkCI; BenchmarkCI.judge()'
       - name: Post results
-        run: julia -e 'using BenchmarkCI; BenchmarkCI.postjudge()'
+        run: julia --project=benchmark -e 'using BenchmarkCI; BenchmarkCI.postjudge()'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
