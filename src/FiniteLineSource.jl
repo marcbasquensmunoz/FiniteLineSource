@@ -14,6 +14,7 @@ using StaticArrays
 using SpecialFunctions
 using Roots
 using DataStructures
+using FMM3D
 
 include("nonhistory/interface.jl")
 include("nonhistory/objects.jl")

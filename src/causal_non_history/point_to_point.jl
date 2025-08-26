@@ -45,7 +45,7 @@ function choose_blocks(::PointToPoint, sources, Nt, ϵ, constants, Q)
     N = Int[]
     while Ncurrent < Nt
         push!(N, Ncurrent)
-        Ncurrent *= 10
+        Ncurrent *= 4
     end
     push!(N, Nt)
     deleteat!(N, findall(==(0), N))

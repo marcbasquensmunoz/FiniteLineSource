@@ -1,5 +1,6 @@
 
 struct BlockMethod{T <: Number}
+    p::Vector{T}
     ζ::Vector{T}
     F::Matrix{T}
     expt::Vector{T}
@@ -11,7 +12,7 @@ struct BlockMethod{T <: Number}
     ranges::Vector{UnitRange{Int}}
     Kranges::Vector{UnitRange{Int}}
     K_min::Matrix{Int}
-    qaux::Vector{T}
+    qaux::Vector{T} 
     N::Vector{Int}
     g::Vector{Vector{T}}
     compute_first_block::Bool
@@ -118,7 +119,10 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     qaux = zeros(length(ζ))
 
+    C = 1 / (2π^2*kg)
+
     BlockMethod(
+        (1 .- expt) .* C .* W ./ζ, 
         ζ, 
         F, 
         expt, 
@@ -136,6 +140,62 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         compute_first_block
     )
 end
+
+function evolve_F!(q,start,stop, block::BlockMethod{T}) where {T <: Number}
+    @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
+        ranges, Kranges, K_min, qaux, g, compute_first_block = block
+
+    #if isempty(Kranges) return end
+
+    Nb = size(q)[1]
+    Nt = size(q)[2]
+    K = size(load_delays)[1]
+    for nt in start:stop
+        current_q = map(x->x[1], load_buffer)
+        @views for (q, b) in zip(q[:, nt], load_buffer)
+            push!(b, q)
+        end
+
+        for j in 1:Nb
+            qaux .= 0.
+            for i in 1:K
+                qin = current_q[j]
+                qout = i == K ? 0. : load_delays[i, j][1]
+                push!(load_delays[i, j], qin)
+                current_q[j] = qout
+                @views @inbounds @. qaux[ranges[i]] = qin * expNin[ranges[i]] - qout * expNout[ranges[i]]
+            end
+            @views @. F[:, j] = expt * F[:, j] + qaux
+        end
+
+        if compute_first_block
+            for i in 1:Nb
+                Δq = diff([0; collect(load_buffer[i])])
+                @inbounds I[i, nt] += dot(Δq, reverse(g[i]))
+            end
+        end
+    end
+end
+
+function fmm_evaluation!(res,sources,targets,block::BlockMethod{T}) where {T <: Number}
+        @unpack ζ, p, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
+        ranges, Kranges, K_min, qaux, g, compute_first_block = block
+
+        # nζ,nt = length(ζ),length(targets)
+    
+        nζ = length(ζ)
+
+        # targets = hcat([[p.x,p.y,p.z] for p in  positions]...)
+        for k in 1:nζ
+            zk = complex(block.ζ[k])
+            charges = complex(block.F[k,:]) * p[k]
+            vals = hfmm3d(1e-12,zk,sources,charges=charges,targets = targets, pg=1)
+            @. res += imag(vals.pot)
+        end
+        
+end
+
+
 
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
