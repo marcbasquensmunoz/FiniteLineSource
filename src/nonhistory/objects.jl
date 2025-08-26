@@ -5,9 +5,11 @@
     kg = 3.
     Δt = 3600.
 
+    Δt̃ = α*Δt/rb^2
+
     b = 10.
-    line_points::Vector{Int} = [30, 30, 30]
-    line_limits::Vector{T} = [0., 0.4, 0.6, 1.]
+    line_points::Union{Vector{Int}, Nothing} = nothing 
+    line_limits::Union{Vector{T}, Nothing} = nothing
 end
 
 @with_kw mutable struct Precomputation{T <: Number}
@@ -43,4 +45,4 @@ end
 
 struct EmptyContainer <: ComputationContainers end
 
-initialize_containers(::Setup, dps) = ([EmptyContainer()], ones(Int64, length(dps)))
+initialize_containers(::Setup, dps) = (ones(Int64, length(dps)), [EmptyContainer()])

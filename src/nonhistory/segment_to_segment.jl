@@ -1,6 +1,5 @@
 import Bessels: besselj!
 import .FiniteLineSource: DiscretizationParameters
-import .Bessels: besselj
 
 struct SegmentToSegment{T <: Number} <: Setup
     D1::T
@@ -8,18 +7,20 @@ struct SegmentToSegment{T <: Number} <: Setup
     D2::T
     H2::T
     σ::T
+    image_strength::T
 end
-function SegmentToSegment(;D1, H1, D2, H2, σ)
+function SegmentToSegment(;D1, H1, D2, H2, σ, image_strength = 0.)
     lowest = min(min(D1, D1+H1), min(D2, D2+H2))
     if lowest < 0
         lowest = abs(lowest)
         nD1, nH1 = min(D1+lowest, D1+H1+lowest), max(D1+lowest, D1+H1+lowest) - min(D1+lowest, D1+H1+lowest)
         nD2, nH2 = min(D2+lowest, D2+H2+lowest), max(D2+lowest, D2+H2+lowest) - min(D2+lowest, D2+H2+lowest)
-        SegmentToSegment(nD1, nH1, nD2, nH2, σ)
+        SegmentToSegment(nD1, nH1, nD2, nH2, σ, image_strength)
     else 
-        return SegmentToSegment(D1, H1, D2, H2, σ)
+        return SegmentToSegment(D1, H1, D2, H2, σ, image_strength)
     end
 end
+transpose(p::SegmentToSegment) = SegmentToSegment(D1=p.D2, H1=p.H2, D2=p.D1, H2=p.H1, σ=p.σ, image_strength=p.image_strength)
 
 struct STSComputationContainers{T <: Number} <: ComputationContainers
     J::Matrix{T}
@@ -46,50 +47,83 @@ function initialize_buffer(setup::SegmentToSegment, rb)
     return buffer
 end
 
+function precompute_z_weights(setup::SegmentToSegment; params::Constants)
+    @unpack D1, H1, D2, H2, σ = setup
+    @unpack rb, line_points = params
+
+    zt, wz = gausslegendre(sum(line_points)+1)   
+    J1 = H1/2
+    J2 = H2/2
+    
+    R̃ = [sqrt(σ^2 + ((J2 * (z2 + 1) + D2) - (J1 * (z1 + 1) + D1))^2) / rb for z1 in zt for z2 in zt]
+    w = [w1*w2 for w1 in wz for w2 in wz]
+    return (R̃=R̃, w=w, J=J1*J2/H2)
+end
+
 function precompute_coefficients(setup::SegmentToSegment; params::Constants, dp::DiscretizationParameters, containers::STSComputationContainers, buffer=nothing, rtol=sqrt(eps()), atol=0.)
     @unpack m, c, n, xt, w = dp
-    @unpack rb, kg = params
+    @unpack rb, kg, line_points, line_limits = params
     @unpack J, P, M, aux = containers
 
-    C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
+    adaptive = isnothing(line_points) || isnothing(line_limits)
 
+    P = zeros(n+1, n+1)
     for k in 0:n
         for s in 1:n+1
             @inbounds P[s, k+1] = (2k+1) * w[s] * Pl(xt[s], k)
         end
     end
 
-    sts_params = MeanSegToSegEvParams(setup)
-    #sts_params_T = transpose(sts_params)
+    if adaptive
+        C = sqrt(m*π/2) / (2 * π^2 * rb * kg)
 
-    r_min, r_max = h_mean_lims(sts_params) 
-    #h_sts(r̃) = (L(r̃*rb, sts_params) + L(r̃*rb, sts_params_T)) / sts_params.H2 
-    h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
-    guide(r̃) = h_sts(r̃) * besselj(1/2, r̃) * imag(exp(im*r̃)) / r̃^(3/2)  
-    R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer, rtol=rtol, atol=atol)
-    
-    function f(r̃, N, rb, m, c, out)
-        besselj!(out, 1/2:(N+1/2), m * r̃)
-        eval = h_sts(r̃) * rb * exp(im*c*r̃) / r̃^(3/2)
-        value = (imag(eval), imag(im*eval), -imag(eval), -imag(im*eval))
-        for k in 0:N
-            @inbounds out[k+1] *= value[(k % 4) + 1]
+        sts_params = MeanSegToSegEvParams(setup)
+        #sts_params_T = transpose(sts_params)
+
+        r_min, r_max = h_mean_lims(sts_params) 
+        #h_sts(r̃) = (L(r̃*rb, sts_params) + L(r̃*rb, sts_params_T)) / sts_params.H2 
+        h_sts(r̃) = h_mean_sts(r̃*rb, sts_params)
+        guide(r̃) = h_sts(r̃) * besselj(1/2, r̃) * imag(exp(im*r̃)) / r̃^(3/2)  
+        R̃, wz = adaptive_nodes_and_weights(guide, r_min/rb, r_max/rb, n = 20, buffer = buffer, rtol=rtol, atol=atol)
+        function f(r̃, N, rb, m, c, out)
+            besselj!(out, 1/2:(N+1/2), m * r̃)
+            eval = h_sts(r̃) * rb * exp(im*c*r̃) / r̃^(3/2)
+            value = (imag(eval), real(eval), -imag(eval), -real(eval))
+            for k in 0:N
+                @inbounds out[k+1] *= value[(k % 4) + 1]
+            end
         end
-    end
-    
-    for (i, r̃) in enumerate(R̃)
-        f(r̃, n, rb, m, c, aux)
-        for k in 1:n+1
-            @inbounds J[k, i] = aux[k]
+        
+        for (i, r̃) in enumerate(R̃)
+            f(r̃, n, rb, m, c, aux)
+            for k in 1:n+1
+                @inbounds J[k, i] = aux[k]
+            end
         end
-    end
 
-    for k in 0:n
-        @inbounds @views M[k+1] = dot(J[k+1, 1:length(wz)], wz)
-    end
+        for k in 0:n
+            @inbounds @views M[k+1] = dot(J[k+1, 1:length(wz)], wz)
+        end
 
-    mul!(aux, P, M)
-    return C .* aux
+        mul!(aux, P, M)
+        return C .* aux
+    else 
+        R̃, wz, J = precompute_z_weights(setup, params=params)
+        C = J * sqrt(m*π/2) / (2 * π^2 * rb * kg)
+    
+        R = zeros(n+1, length(R̃))
+        M = zeros(n+1)
+
+        for (i, r̃) in enumerate(R̃)
+            for k in 0:n
+                R[k+1, i] = besselj(k+1/2, m * r̃) * imag((im)^k * exp(im*c*r̃)) / r̃^(3/2)
+            end
+        end
+    
+        M .= R * wz
+        M .= P * M 
+        return C .* M
+    end
 end
 
 function constant_integral(setup::SegmentToSegment; params::Constants)
@@ -116,4 +150,3 @@ function has_heatwave_arrived(setup::SegmentToSegment; params::Constants, t)
 
     d2 / (2α*t) < threshold^2
 end
-

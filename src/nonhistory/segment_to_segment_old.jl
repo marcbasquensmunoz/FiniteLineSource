@@ -6,6 +6,7 @@
     σ
 end
 SegmentToSegment(old::SegmentToSegmentOld) = SegmentToSegment(D1=old.D1, H1=old.H1, D2=old.D2, H2=old.H2, σ=old.σ)
+SegmentToSegmentOld(new::SegmentToSegment) = SegmentToSegmentOld(D1=new.D1, H1=new.H1, D2=new.D2, H2=new.H2, σ=new.σ)
 
 function precompute_z_weights(setup::SegmentToSegmentOld; params::Constants)
     @unpack D1, H1, D2, H2, σ = setup

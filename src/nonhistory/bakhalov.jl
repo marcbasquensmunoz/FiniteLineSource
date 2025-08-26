@@ -34,11 +34,11 @@ function compute_integral_throught_history!(setup::Setup; I, q, precomp::Precomp
     return nothing
 end
 
-function precompute_parameters(setup::Setup; params::Constants, n = 20, n_tot = [0])
+function precompute_parameters(setup::Setup; params::Constants, n = 20, n_tot = [0], ϵ = nothing)
     @unpack Δt, b = params
     type = gettype(setup)
 
-    _, _, segments = quadgk_segbuf(f_guess(setup, params), convert(type, 0.), convert(type, b))
+    _, _, segments = quadgk_segbuf(f_guess(setup, params), convert(type, 0.), convert(type, b), atol=ϵ)
     dps = @views [DiscretizationParameters(s.a, s.b, n) for s in segments]
     map, containers = initialize_containers(setup, dps)    
     x  = reduce(vcat, (dp.x for dp in dps))
