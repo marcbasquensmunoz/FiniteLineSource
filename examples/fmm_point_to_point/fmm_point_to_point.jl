@@ -51,30 +51,13 @@ end
 # # Error
 err = @. abs(Ib[1, :] - C)
 maximum(err)
+
+res[1] - C[end]
 ##.
 
-# #######################################
-# # Performance analysis with non-history
-# #######################################
-
-# Inh = zeros(Nt)
-
-# # Precomputation
-# block = @btime prepare_containers(setup, positions, ϵ, Nt, constants);
-# precomp = @btime precompute_parameters(setup, params=constants, ϵ=ϵ);
-
-# # Simulation 
-# @btime evolve!(Ib, q, block)
-# @btime compute_integral_throught_history!(setup, I=Inh, q=q, precomp=precomp, params=constants)
-
-
-
-
-# Rearrange block.Kranges so the ranges of each block is separated
-Kb = push!([block.Kranges[j].start:block.Kranges[j+1].start-1 for j = 1:length(block.Kranges)-1], block.Kranges[end])
 
 # Rearrange block.ζ so the ranges of each block is separated
-ζb = [block.ζ[k] for k in Kb]
+ζb = [block.ζ[k] for k in block.ranges]
 
 Ks1 = sparse((block.K_min .== 1))
 Ks2 = sparse((block.K_min .== 2))
@@ -82,11 +65,3 @@ Ks3 = sparse((block.K_min .== 3))
 Ks4 = sparse((block.K_min .== 4))
 Ks5 = sparse((block.K_min .== 5))
 Ks6 = sparse((block.K_min .== 6))
-# Ks7 = sparse((block.K_min .== 7))
-
-
-targets = hcat([[p.x,p.y,p.z] for p in  positions]...)
-zk = complex(block.ζ[70])
-charges = complex(ones(length(block.F[70,:])))
-@time vals = hfmm3d(1e-12,zk,targets,charges=charges,targets = targets,pg=1)
-imag.(vals.pot)

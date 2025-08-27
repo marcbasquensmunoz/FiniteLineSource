@@ -38,8 +38,9 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
 
     n = 10
     expected_blocks = 5
-    ϵ´ = 100ϵ/Q
     Ns = length(sources)
+    ϵ = ϵ / Ns
+    ϵ´ = 100ϵ/Q
     # Evaluation points 
     # DO NOT USE FOR SELF-RESPONSE
     distances = zeros(Ns, Ns)
@@ -69,7 +70,7 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         end
         K_min[j, j] = 1
     end
-    K_min .= 2
+    #K_min .= 2
    
     ζ = zeros(0)
     W = zeros(0)
@@ -174,13 +175,24 @@ function evolve_F!(q,start,stop, block::BlockMethod{T}) where {T <: Number}
 end
 
 function fmm_evaluation!(res,sources,block::BlockMethod{T}; fmmeps = 1e-12) where {T <: Number}
-    @unpack ζ, p, F, Kranges, rb = block
+    @unpack ζ, p, F, Kranges, ranges, K_min, HM, rb = block
 
-    for k in Kranges[end-2]
+    for k in Kranges[2]
         zk = complex(ζ[k]/rb)
-        charges = complex(F[k,:]) * p[k]
+        charges = complex(F[k, :]) * p[k]
         vals = hfmm3d(fmmeps, zk, sources, charges=charges, pg=1)
         @. res += imag(vals.pot) 
+    end
+
+    Nb = size(K_min)[1]
+    for target in 1:Nb
+        for source in 1:Nb
+            if source == target continue end
+            if K_min[source, target] == 1 
+                range = ranges[1]
+                @inbounds @views res[target] += dot(F[range, source], HM[range, target, source])
+            end
+        end
     end
 end
 
