@@ -173,26 +173,16 @@ function evolve_F!(q,start,stop, block::BlockMethod{T}) where {T <: Number}
     end
 end
 
-function fmm_evaluation!(res,sources,block::BlockMethod{T}; ffmeps = 1e-12) where {T <: Number}
-        @unpack ζ, p, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
-        ranges, Kranges, K_min, qaux, g, compute_first_block, rb = block
+function fmm_evaluation!(res,sources,block::BlockMethod{T}; fmmeps = 1e-12) where {T <: Number}
+    @unpack ζ, p, F, Kranges, rb = block
 
-        @show ffmeps
-        # nζ,nt = length(ζ),length(targets)
-    
-        nζ = length(ζ)
-
-        # targets = hcat([[p.x,p.y,p.z] for p in  positions]...)
-        for k in Kranges[end-2]#1:nζ
-            zk = complex(block.ζ[k]/rb)
-            charges = complex(block.F[k,:]) * p[k]
-            vals = hfmm3d(ffmeps,zk,sources,charges=charges, pg=1)
-            @. res += imag(vals.pot) 
-        end
-        
+    for k in Kranges[end-2]
+        zk = complex(ζ[k]/rb)
+        charges = complex(F[k,:]) * p[k]
+        vals = hfmm3d(fmmeps, zk, sources, charges=charges, pg=1)
+        @. res += imag(vals.pot) 
+    end
 end
-
-
 
 function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
