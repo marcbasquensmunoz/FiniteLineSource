@@ -13,31 +13,56 @@ kg = 3.
 rb = 0.1
 constants = Constants(Δt=Δt, α=α, kg=kg, rb=rb)
 
-B = 5.
+B = 2.5
 
-positions = [PointSource(B*i, B*j, B*k, rb) for i in 0:2 for j in 0:2 for k in 0:2]
-q = ones(length(positions), Nt)
+positions = [PointSource(B*i, B*j, B*k, rb) for i in 0:9 for j in 0:9 for k in 0:9]
+q = ones(length(positions)) * [5 * sin(i/24) for i in 1:Nt]' #ones(length(positions), Nt)
 
 #####################################
 # Error analysis
 #####################################
-setup = PointToPoint(r = B)
+setup = PointToPoint(r = B)2
 
 # Block method
 sources = targets = hcat([[p.x,p.y,p.z] for p in  positions]...)
 res = zeros(size(targets)[2])
 
 block = prepare_containers(setup, positions, ϵ, Nt, constants, compute_first_block=false);
-FiniteLineSource.evolve_F!(q, 1, Nt, block)
+FiniteLineSource.evolve_F!(q, block)
 @time FiniteLineSource.fmm_evaluation!(res, sources, block; fmmeps = 1e-8)
+
+block2 = prepare_containers(setup, positions, ϵ, Nt, constants, compute_first_block=false);
+Ib = zeros(length(positions), Nt)
+evolve!(Ib, q, block2)
+
+abs.(res .- Ib[:,Nt])
+maximum(abs.(res .- Ib[:,Nt]))
+##.
+
+
+Nd = 10
+res = zeros(size(targets)[2])
+block = prepare_containers(setup, positions, ϵ, Nt, constants, compute_first_block=false);
+FiniteLineSource.evolve_F!(q[:, 1:Nt-Nd], block)
+@time FiniteLineSource.fmm_evaluation!(res, sources, block; fmmeps = 1e-8)
+T1 = copy(res)
+FiniteLineSource.evolve_F!(q[:, Nt-Nd+1:end], block)
+res = zeros(size(targets)[2])
+@time FiniteLineSource.fmm_evaluation!(res, sources, block; fmmeps = 1e-8)
+T2 = copy(res)
 
 block2 = prepare_containers(setup, positions, ϵ, Nt, constants, compute_first_block=false);
 Ib = zeros(length(positions), Nt)
 @time evolve!(Ib, q[:,1:Nt], block2)
 
-abs.(res .- Ib[:,Nt])
 maximum(abs.(res .- Ib[:,Nt]))
-##.
+
+dT = T2-T1
+
+Tint = T1 * ones(Nd+1)' + dT * ((0:Nd) ./ Nd)' 
+
+maximum(abs.(Tint - Ib[:, end-Nd:end]))
+
 
 # # Convolution
 

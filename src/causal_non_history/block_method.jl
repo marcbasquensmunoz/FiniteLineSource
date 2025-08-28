@@ -14,6 +14,7 @@ struct BlockMethod{T <: Number}
     K_min::Matrix{Int}
     qaux::Vector{T} 
     N::Vector{Int}
+    r::Vector{T}
     g::Vector{Vector{T}}
     compute_first_block::Bool
     rb::T
@@ -70,7 +71,6 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         end
         K_min[j, j] = 1
     end
-    #K_min .= 2
    
     ζ = zeros(0)
     W = zeros(0)
@@ -139,13 +139,14 @@ function prepare_containers(setup::Setup, sources, ϵ, Nt, constants::Constants,
         K_min, 
         qaux, 
         N,
+        ND,
         g,
         compute_first_block,
         rb
     )
 end
 
-function evolve_F!(q,start,stop, block::BlockMethod{T}) where {T <: Number}
+function evolve_F!(q, block::BlockMethod{T}) where {T <: Number}
     @unpack ζ, F, expt, expNin, expNout, HM, load_delays, load_buffer, 
         ranges, Kranges, K_min, qaux, g, compute_first_block = block
 
@@ -154,7 +155,7 @@ function evolve_F!(q,start,stop, block::BlockMethod{T}) where {T <: Number}
     Nb = size(q)[1]
     Nt = size(q)[2]
     K = size(load_delays)[1]
-    for nt in start:stop
+    for nt in 1:Nt
         current_q = map(x->x[1], load_buffer)
         @views for (q, b) in zip(q[:, nt], load_buffer)
             push!(b, q)
