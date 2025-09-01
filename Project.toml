@@ -1,7 +1,7 @@
 name = "FiniteLineSource"
 uuid = "64cfb1b1-06f0-48af-b80e-43c410dfe9e8"
 authors = ["Marc Basquens <marc5@kth.se> and contributors"]
-version = "1.1.0"
+version = "1.1.1"
 
 [deps]
 Bessels = "0e736298-9ec6-45e8-9647-e4fc86a2fe38"
@@ -19,21 +19,21 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 julia = "1.10" 
+Aqua = "0.8"
+BenchmarkTools = "1.6"
 Bessels = "0.2"
-DSP = "0.5 - 0.8"
-DataStructures = "0.19"
+DSP = "0.8"
+DataStructures = "0.18 - 0.19"
 FastGaussQuadrature = "1.0"
 LegendrePolynomials = "0.4"
-LinearAlgebra = "1"
+LinearAlgebra = "1.10"
 Parameters = "0.12"
-Polynomials = "1 - 4.1"
+Polynomials = "4.0"
 QuadGK = "2.11"
 Roots = "2.2"
 SpecialFunctions = "2.5"
 StaticArrays = "1.9"
-Aqua = "0.8"
-Test = "1"
-BenchmarkTools = "1.6"
+Test = "1.10"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
