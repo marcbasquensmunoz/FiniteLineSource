@@ -146,8 +146,12 @@ function evolve!(I, q, block::BlockMethod{T}) where {T <: Number}
     Nb = size(q)[1]
     Nt = size(q)[2]
     K = size(load_delays)[1]
+    current_q = zeros(Nb)
+
     for nt in 1:Nt
-        current_q = map(x->x[1], load_buffer)
+        for i in 1:Nb
+            current_q[i] = load_buffer[i][1]
+        end
         @views for (q, b) in zip(q[:, nt], load_buffer)
             push!(b, q)
         end
