@@ -35,15 +35,8 @@ function make_interpolated_simulation_with_bound(;Nt, r, ϵ, positions, constant
     Ns = 0.
     current_q = zeros(Nb)
 
-    q_in_der = (0., 0.)
-    q_out_der = (0., 0.)
-    dQ_in = 0.
-    dQ_out = 0.
-    Q_in = 0.
-    Q_out = 0.
-
-    source = 1
-    target = 2
+    ref_source = 1
+    ref_target = 2
 
     derf = [( erf(r/rb / sqrt(4*Nb*Δt̃)) - erf(r/rb / sqrt(4*(Nb+1)*Δt̃))) / (4*π*kg*r * Δt̃) for Nb in N]
     d2erf = [(erf(r/rb / sqrt(4*Nb*Δt̃)) + erf(r/rb / sqrt(4*(Nb+2)*Δt̃)) - 2*erf(r/rb / sqrt(4*(Nb+1)*Δt̃))) / (4*π*kg*r * Δt̃^2) for Nb in N]
@@ -114,9 +107,9 @@ function make_interpolated_simulation_with_bound(;Nt, r, ϵ, positions, constant
         @. Q_eff = abs(Q_in)
 
         for i in 1:K
-            osc_int[i] = dot(F[ranges[i], source] .* (1 .- expt[ranges[i]]) .^ 2, HM[ranges[i], target, source]) / Δt̃^2
-            C_disc_1[i] = derf[i] * dQ_in[i] - derf[i+1] * dQ_out[i]#derf[i+1] * (i == K ? 0. : dQ_out[i])
-            C_disc_2[i] = -d2erf[i] * Q_in[i] + d2erf[i+1] * Q_out[i]#d2erf[i+1] * (i == K ? 0. : Q_out[i])
+            osc_int[i] = dot(F[ranges[i], ref_source] .* (1 .- expt[ranges[i]]) .^ 2, HM[ranges[i], ref_target, ref_source]) / Δt̃^2
+            C_disc_1[i] = derf[i] * dQ_in[i] - derf[i+1] * dQ_out[i]
+            C_disc_2[i] = -d2erf[i] * Q_in[i] + d2erf[i+1] * Q_out[i]
             bound_int[i] = (log((N[i]+1)/(N[i+1]+1)) + 1/2 * log(N[i+1]*(N[i+1]+2)/(N[i]*(N[i]+2)))) / (2*π^2*kg*r*Δt̃^2) * Q_eff[i]
         end
 
@@ -125,24 +118,17 @@ function make_interpolated_simulation_with_bound(;Nt, r, ϵ, positions, constant
         @. B = 1/Δt̃ * sqrt(8ϵ / B_max)
         @. Ns = [max(b == Inf ? 1 : Int(floor(b)), 1) for b in B]
 
-        #@show nt, osc_int[2], C_disc_1[2], C_disc_2[2], B_max[2], B_tot[2], B[2]
-
         for i in 1:K
             if nt - N_start[i] >= Ns[i] || nt == Nt
-               # @show nt, i, Ns[i], N_start[i]
                 if nt > N[i] push!(windows[i], Ns[i]) end
                 I_k_present[i, :] .= 0.
                 for target in 1:Nb
                     for source in 1:Nb
                         if source == target continue end
-                        #if K_min[source, target] == 0 || length(Kranges) < K_min[source, target] continue end
                         @inbounds range = ranges[i]
                         @inbounds @views I_k_present[i, target] += dot(F[range, source], HM[range, target, source])
                     end
-#                    if nt == 1 continue end
                     N_int = nt - N_start[i]
-                    #@views @. I_int[target, N_start[i]+1:nt-1] += I_int[target, N_start[i]] + (I_int[target, nt] - I_int[target, N_start[i]]) * (1:N_int-1) / N_int
-                    #@show nt, i, I_k_present[i, target]
                     @views @. I_int[target, N_start[i]+1:nt] += I_k_past[i, target] + (I_k_present[i, target] - I_k_past[i, target]) * (1:N_int) / N_int
                 end 
                 @views I_k_past[i, :] .= I_k_present[i, :]
@@ -201,7 +187,7 @@ function get_max_error(q, ϵ, r; use_bound)
     mean(abs.(Ib - I_int_bound)), windows
 end
 
-function generate_analysis_plot(q; use_bound=false)
+function generate_analysis_plot(q; use_bound=false, titles = [])
     rr = 10. .^ (0:0.2:2)
     ϵϵ = 10. .^ (-2:-2:-10)
 
@@ -224,15 +210,15 @@ function generate_analysis_plot(q; use_bound=false)
     max_K = 3
 
     axes = Matrix{Axis}(undef, max_K+1, length(q))
-    fig = Figure(size=(length(q)*400 + 200, 1500))
+    fig = Figure(size=(length(q)*250, 900))
 
     for (i, load) in enumerate(q) 
-        axes[1, i] = Axis(fig[1, i], xlabel=L"\log_{10} \tilde{r}", ylabel=L"\log_{10} \ \Vert \epsilon  \Vert_{\infty}",)
+        axes[1, i] = Axis(fig[1, i], xlabel=L"\log_{10} \tilde{r}", ylabel=L"\log_{10} \ \Vert \epsilon  \Vert_{\infty}")
         for j in 1:max_K
-            axes[1+j, i] = Axis(fig[1+j, i], xlabel=L"\log_{10} \tilde{r}", ylabel=L"\log_{10} N_s", title="Block $(j+1)")
+            axes[1+j, i] = Axis(fig[1+j, i], xlabel=L"\log_{10} \tilde{r}", ylabel=L"\log_{10} N_s")
 
             for k in 1:length(ϵϵ)
-                label = "ϵ=1e$(Int(log10(ϵϵ[k])))"
+                label = L"ϵ=10^{%$(Int(log10(ϵϵ[k])))}"
 
                 means = zeros(length(rr))
                 lows = zeros(length(rr))
@@ -260,7 +246,7 @@ function generate_analysis_plot(q; use_bound=false)
         end
     end
 
-    Legend(fig[1, max_K+1], axes[1, 1])
+    Legend(fig[max_K+2, :], axes[1, 1], orientation = :horizontal)
 
     for i in 1:length(q)
         Makie.ylims!(axes[1, i], -16, 0)
@@ -287,6 +273,13 @@ function generate_analysis_plot(q; use_bound=false)
             linkyaxes!(axes[i, j], axes[i, j+1])
         end
     end
+
+    for (i, title) in enumerate(titles)
+        Label(fig[0, i], title, tellwidth=false, fontsize=20)
+    end
+    for i in 1:max_K
+        Label(fig[i+1, 0], "Block $(i+1)", tellheight=false, fontsize=16, rotation = pi/2)
+    end
     fig
 end
 
@@ -306,19 +299,19 @@ function show_interpolation(ϵ, r, q)
     I_int_bound = make_interpolated_simulation_with_bound(Nt=Nt, r=r, ϵ=ϵ, positions=positions, constants=constants, q=q, windows=windows)
     
     w1 = findfirst(>(0), I_int_bound[1,:])
-    interpolation_limits = cumsum(vcat([w1], windows)) 
+    interpolation_limits = cumsum(vcat([w1], windows[1])) 
     interpolation_limits[end] = Nt
 
-    @. interpolation_limits *= Δt ./ (8760 * 3600) 
+    plot_interpolation_limits = @. interpolation_limits * Δt ./ (8760 * 3600) 
 
     tt = @. (1:Nt) / (8760 * 3600) * Δt
 
     fig = Figure()
     ax = Axis(fig[1, 1], ylabel=L"T \ (°C)", xlabel=L"t \ (years)",)
     lines!(ax, tt, Ib[1,:],          label = "Real")
-    lines!(ax, tt, I_int_bound[1,:], label = "Interpolated", linewidth = 3, alpha = 0.6)
+    lines!(ax, tt, I_int_bound[1,:], label = "Interpolated", linewidth = 5, alpha = 0.6)
 
-    vlines!(interpolation_limits, linestyle = :dash, color = :green, label = "Interpolation \npoints")
+    vlines!(plot_interpolation_limits, linestyle = :dash, color = :green, label = "Interpolation \npoints")
     axislegend(position= :lt);
     fig
 end
@@ -327,12 +320,22 @@ Nt = 8760*100
 q1 = ones(2) * [sin(i/24) for i in 1:Nt]'
 q2 = ones(2) * [sin(i/8760) for i in 1:Nt]'
 q3 = ones(2, Nt)
+q = [q1, q2, q3]
+titles = [
+    "High frequency",
+    "Low frequency",
+    "Constant"
+]
 
-show_interpolation(5 * 1e-4, 10., q1)
-show_interpolation(1e-5, 10., q2)
+high_osc_int = show_interpolation(1e-6, 10., q1[:, 1:5000])
+low_osc_int = show_interpolation(5 * 1e-5, 10., q2[:, 1:20000])
 
-fig_bound = generate_analysis_plot([q1, q2, q3], use_bound=true)
-fig_int = generate_analysis_plot([q1, q2, q3], use_bound=false)
+save("interpolation_high.png", high_osc_int)
+save("interpolation_low.png", low_osc_int)
+
+
+fig_bound = generate_analysis_plot(q, use_bound=true, titles=titles)
+fig_int = generate_analysis_plot(q, use_bound=false, titles=titles)
 
 save("analysis_block_no_bound.png", fig_int)
 save("analysis_block_bound.png", fig_bound)
